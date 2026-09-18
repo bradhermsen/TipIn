@@ -59,4 +59,4 @@ jobs:
             --container '$web' \
             --source 'web/admin-portal' \
             --delete-destination true \
-            --auth-mode login
+            --account-key "${{ secrets.AZURE_STORAGE_ACCOUNT_KEY_ADMIN_DEV }}"
