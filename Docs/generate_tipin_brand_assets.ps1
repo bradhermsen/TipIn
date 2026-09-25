@@ -1,5 +1,5 @@
 param(
-    [string]$RepositoryRoot = "C:\NetFront"
+    [string]$RepositoryRoot = "C:\TipIn"
 )
 
 Set-StrictMode -Version Latest
@@ -156,7 +156,7 @@ $adminAssets = Join-Path $RepositoryRoot "web\admin-portal\assets"
 $gameViewAssets = Join-Path $RepositoryRoot "web\game-view\assets"
 $gameViewPublic = Join-Path $RepositoryRoot "web\game-view\public"
 $mobileAssets = Join-Path $RepositoryRoot "mobile\game-manager-mobile\assets"
-$apiAssets = Join-Path $RepositoryRoot "api\NetFrontAPI\Assets"
+$apiAssets = Join-Path $RepositoryRoot "api\TipInAPI\Assets"
 $bridgeRoot = Join-Path $RepositoryRoot "TipInBridgeApp"
 
 Save-TipInPng (Join-Path $adminAssets "TipIn NoBG.png") 1024 "Transparent"
@@ -173,7 +173,7 @@ Save-TipInPng (Join-Path $gameViewAssets "TipIn_Default_Logo.png") 1024 "Square"
 Save-TipInJpeg (Join-Path $gameViewAssets "TipIn_Default_Logo.jpg")
 Save-TipInPng (Join-Path $apiAssets "TipIn NoBG.png") 1024 "Circle"
 Save-TipInPng (Join-Path $apiAssets "TipIn_Default_Logo.png") 1024 "Circle"
-Save-TipInPng (Join-Path $apiAssets "netfront-logo.png") 1024 "Circle"
+Save-TipInPng (Join-Path $apiAssets "TipIn-logo.png") 1024 "Circle"
 Save-TipInPng (Join-Path $mobileAssets "TipIn NoBG.png") 1024 "Transparent"
 Save-TipInPng (Join-Path $mobileAssets "TipIn_Default_Logo.png") 1024 "Square" 0.86
 Save-TipInJpeg (Join-Path $mobileAssets "TipIn_Default_Logo.jpg")

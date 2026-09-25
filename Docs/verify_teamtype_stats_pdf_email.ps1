@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $base = 'http://localhost:7071/api'
 
-$loginBody = @{ email='hermiehockey@outlook.com'; password='NetFront2024!' } | ConvertTo-Json
+$loginBody = @{ email='hermiehockey@outlook.com'; password='TipIn2024!' } | ConvertTo-Json
 $login = Invoke-RestMethod -Method Post -Uri "$base/auth/login" -ContentType 'application/json' -Body $loginBody
 $token = $login.token
 $headers = @{ Authorization = "Bearer $token" }
@@ -111,7 +111,7 @@ $statsMismatch = @($statsFiltered | Where-Object { $_.teamType -ne $filterType }
 
 $finalGame = $games | Where-Object { @('Final','Completed','Closed') -contains $_.status } | Select-Object -First 1
 if (-not $finalGame) { throw 'No final/completed game found for summary PDF/email check.' }
-$pdfPath = 'c:\NetFront\Docs\verify-summary.pdf'
+$pdfPath = 'c:\TipIn\Docs\verify-summary.pdf'
 Invoke-WebRequest -Uri "$base/games/$($finalGame.gameId)/summary-pdf" -Headers $headers -OutFile $pdfPath
 
 $emailSettingsPayload = @{
@@ -119,8 +119,8 @@ $emailSettingsPayload = @{
   smtpPort = 1025
   smtpUsername = ''
   smtpPassword = ''
-  fromAddress = 'no-reply@netfront.local'
-  fromName = 'NetFront'
+  fromAddress = 'no-reply@TipIn.local'
+  fromName = 'TipIn'
   useSsl = $false
   enabled = $true
 }
@@ -129,14 +129,14 @@ $null = Invoke-RestMethod -Method Put -Uri "$base/email/settings" -Headers $head
 $completePayload = @{
   notes = 'Live verification pass for teamType/mascot formatting.'
   emailDispatch = @{
-    to = @('qa@netfront.local')
-    subject = 'NetFront Game Finalized - Verification Pass'
+    to = @('qa@TipIn.local')
+    subject = 'TipIn Game Finalized - Verification Pass'
   }
 }
 $completeResult = Invoke-RestMethod -Method Post -Uri "$base/games/$($finalGame.gameId)/complete" -ContentType 'application/json' -Body ($completePayload | ConvertTo-Json -Depth 6)
 
 $mailhog = Invoke-RestMethod -Method Get -Uri 'http://localhost:8025/api/v2/messages?limit=20'
-$mhItem = $mailhog.items | Where-Object { $_.Content.Headers.Subject -contains 'NetFront Game Finalized - Verification Pass' } | Select-Object -First 1
+$mhItem = $mailhog.items | Where-Object { $_.Content.Headers.Subject -contains 'TipIn Game Finalized - Verification Pass' } | Select-Object -First 1
 
 $result = [ordered]@{
   updateInternalInheritance = [ordered]@{
@@ -174,6 +174,6 @@ $result = [ordered]@{
   }
 }
 
-$result | ConvertTo-Json -Depth 12 | Set-Content -Path 'c:\NetFront\Docs\verify_live_results.json' -Encoding utf8
-Write-Output 'WROTE:c:\NetFront\Docs\verify_live_results.json'
-Write-Output 'WROTE:c:\NetFront\Docs\verify-summary.pdf'
+$result | ConvertTo-Json -Depth 12 | Set-Content -Path 'c:\TipIn\Docs\verify_live_results.json' -Encoding utf8
+Write-Output 'WROTE:c:\TipIn\Docs\verify_live_results.json'
+Write-Output 'WROTE:c:\TipIn\Docs\verify-summary.pdf'

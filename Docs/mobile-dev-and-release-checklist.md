@@ -1,4 +1,4 @@
-# NetFront Mobile: Dev + Release APK Checklist
+# TipIn Mobile: Dev + Release APK Checklist
 
 This project can support both workflows at the same time:
 

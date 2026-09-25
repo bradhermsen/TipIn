@@ -1,4 +1,4 @@
-# NetFront Scoreboard Control Mode Matrix (Printout)
+# TipIn Scoreboard Control Mode Matrix (Printout)
 
 Date: 2026-08-03
 Scope: Game Manager Mobile + Gateway integration modes

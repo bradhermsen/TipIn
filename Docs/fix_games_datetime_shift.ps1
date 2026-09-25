@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 Write-Output 'WARNING: This script is not idempotent. Running with -Apply more than once will keep shifting times.'
 
-$settingsPath = 'c:\NetFront\api\NetFrontAPI\local.settings.json'
+$settingsPath = 'c:\TipIn\api\TipInAPI\local.settings.json'
 $settingsRaw = Get-Content $settingsPath -Raw
 $match = [regex]::Match($settingsRaw, '"DefaultConnection"\s*:\s*"([^"]+)"')
 if (-not $match.Success) {

@@ -1,12 +1,12 @@
-# NetFront System Security
+# TipIn System Security
 
-NetFront uses a role‑based security model designed for youth hockey, high school hockey, and future tournament expansion. This document defines all roles, permissions, access rules, access code behavior, and session security.
+TipIn uses a role‑based security model designed for youth hockey, high school hockey, and future tournament expansion. This document defines all roles, permissions, access rules, access code behavior, and session security.
 
 ---
 
 # 1. Overview
 
-NetFront separates responsibilities across several roles:
+TipIn separates responsibilities across several roles:
 
 - SuperAdmin
 - OrgAdmin
@@ -332,4 +332,4 @@ The role structure is designed to scale without major changes.
 
 ---
 
-# End of NetFront System Security
+# End of TipIn System Security

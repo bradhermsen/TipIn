@@ -1,5 +1,5 @@
-IF DB_NAME() <> N'NetFrontDB'
-    THROW 50000, 'Wrong database. Connect to NetFrontDB before applying the season organization migration.', 1;
+IF DB_NAME() <> N'TipInDB'
+    THROW 50000, 'Wrong database. Connect to TipInDB before applying the season organization migration.', 1;
 
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;

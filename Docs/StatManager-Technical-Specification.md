@@ -1,13 +1,13 @@
-# NetFront StatManager Technical Specification
+# TipIn StatManager Technical Specification
 
 **Document version:** 1.0  
 **Status:** Proposed for product and architecture approval  
 **Last updated:** 2026-08-25  
-**Applies to:** NetFront mobile application, NetFront API, and SQL Server database
+**Applies to:** TipIn mobile application, TipIn API, and SQL Server database
 
 ## 1. Purpose
 
-This document converts the [NetFront StatManager React Native Component Spec](./NetFront%20StatManager%20%E2%80%94%20React%20Native%20Component%20Spec.pdf) into an implementation-ready product and technical specification.
+This document converts the [TipIn StatManager React Native Component Spec](./TipIn%20StatManager%20%E2%80%94%20React%20Native%20Component%20Spec.pdf) into an implementation-ready product and technical specification.
 
 The component PDF remains the visual and interaction reference for StatManager screens. This document is authoritative for:
 
@@ -28,7 +28,7 @@ The terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 If requirements conflict, use this order of precedence:
 
 1. This technical specification for StatManager behavior and security.
-2. [NetFront System Security](./NetFrontSystemSecurity.md) for system-wide role policy.
+2. [TipIn System Security](./TipInSystemSecurity.md) for system-wide role policy.
 3. [Game Manager Tablet Failure and Recovery](./GameManager-Tablet-Recovery.md) for recovery and lease behavior.
 4. [Players vs Roster Behavior](./PlayersVsRosterBehavior.md) and [Roster Sync Rules](./RosterSyncRules.md) for player and roster ownership.
 5. The component PDF for visual design and component interactions.
@@ -68,7 +68,7 @@ The following decisions are part of the approved target design.
 
 StatManager MUST:
 
-- provide fast tablet entry for the six event types defined by the component PDF plus the NetFront `shotattempt` extension;
+- provide fast tablet entry for the six event types defined by the component PDF plus the TipIn `shotattempt` extension;
 - associate observations with rink location, period, capture sequence, zone, and optional player;
 - track mutually exclusive offensive, neutral, and defensive zone intervals;
 - operate during temporary internet loss without duplicate server records;
@@ -145,7 +145,7 @@ Authorized Team Managers, OrgAdmins, and SuperAdmins MAY generate or revoke per-
 
 ### 7.1 One Application Shell
 
-The current Expo application becomes a neutral NetFront game-operations shell. The installed package identity MAY remain unchanged for upgrade compatibility. The visible product name SHOULD become **NetFront Game Operations** when both modules ship.
+The current Expo application becomes a neutral TipIn game-operations shell. The installed package identity MAY remain unchanged for upgrade compatibility. The visible product name SHOULD become **TipIn Game Operations** when both modules ship.
 
 The app MUST contain:
 
@@ -228,11 +228,11 @@ The UI MUST represent these states without ambiguous controls:
 
 | Domain                        | Authority                                                  | StatManager behavior                  |
 | ----------------------------- | ---------------------------------------------------------- | ------------------------------------- |
-| Game ID and scheduled teams   | NetFront API/database                                      | Read-only                             |
-| Game status                   | NetFront API/database                                      | Read-only                             |
+| Game ID and scheduled teams   | TipIn API/database                                         | Read-only                             |
+| Game status                   | TipIn API/database                                         | Read-only                             |
 | Current period                | StatManager operator, initialized from server game context | Required event grouping context       |
 | Game clock                    | Game Manager/official scoreboard                           | Not consumed or stored by StatManager |
-| Official score summary        | NetFront API/database when available                       | Optional read-only display            |
+| Official score summary        | TipIn API/database when available                          | Optional read-only display            |
 | Official goals and penalties  | Game Manager/API official tables                           | Display only if needed                |
 | SM observations               | `GameStatEvents`                                           | SM may write within scope             |
 | Zone intervals                | `GameZoneIntervals`                                        | SM may write within scope             |
@@ -553,7 +553,7 @@ Required constraints/indexes:
 
 This table stores analytical StatManager observations and is separate from official `GameEvents`, `GameGoals`, and `GamePenalties`.
 
-The approved event contract contains the six component-PDF events plus the NetFront Shot Attempt extension:
+The approved event contract contains the six component-PDF events plus the TipIn Shot Attempt extension:
 
 | Stable code   | Display label | Rink point |   Player | Strength state | Official scoring effect |
 | ------------- | ------------- | ---------: | -------: | -------------: | ----------------------- |
@@ -929,7 +929,7 @@ Every API response SHOULD include a correlation ID. Mobile diagnostics SHOULD al
 ### Phase 0: Contract Approval
 
 - Approve section 3 product decisions.
-- Freeze the seven event codes and event-specific fields, including the NetFront `shotattempt` extension.
+- Freeze the seven event codes and event-specific fields, including the TipIn `shotattempt` extension.
 - Approve code activation, final grace, idle timeout, and report recipient policy.
 - Approve this schema and endpoint namespace.
 
@@ -1003,7 +1003,7 @@ The following values must be explicitly approved before implementation. Recommen
 | Final-game edits                        | Administrative correction workflow only                                      |
 | Report recipients                       | Preconfigured team contacts plus confirmed approved recipients               |
 | Code migration                          | New per-game hashed codes; retire team plaintext codes after transition      |
-| Mobile display name                     | NetFront Game Operations                                                     |
+| Mobile display name                     | TipIn Game Operations                                                        |
 
 ## 22. Acceptance Criteria
 

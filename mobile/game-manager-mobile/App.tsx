@@ -477,22 +477,22 @@ function isValidEmailAddress(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-const GOAL_OFFLINE_QUEUE_KEY = "netfront.goalOfflineQueue";
-const SHOT_OFFLINE_QUEUE_KEY = "netfront.shotOfflineQueue";
-const PENALTY_OFFLINE_QUEUE_KEY = "netfront.penaltyOfflineQueue";
-const GOALIE_OFFLINE_QUEUE_KEY = "netfront.goalieOfflineQueue";
-const FINALIZE_OFFLINE_QUEUE_KEY = "netfront.finalizeOfflineQueue";
-const ACTIVE_GAME_SNAPSHOT_KEY = "netfront.activeGameSnapshot";
-const ACTIVE_GAME_RESUME_KEY = "netfront.activeGameResume";
-const ACTIVE_GAME_MARKER_KEY = "netfront.activeGameMarker";
-const SCOREBOARD_GATEWAY_SETTINGS_KEY = "netfront.scoreboardGatewaySettings";
+const GOAL_OFFLINE_QUEUE_KEY = "TipIn.goalOfflineQueue";
+const SHOT_OFFLINE_QUEUE_KEY = "TipIn.shotOfflineQueue";
+const PENALTY_OFFLINE_QUEUE_KEY = "TipIn.penaltyOfflineQueue";
+const GOALIE_OFFLINE_QUEUE_KEY = "TipIn.goalieOfflineQueue";
+const FINALIZE_OFFLINE_QUEUE_KEY = "TipIn.finalizeOfflineQueue";
+const ACTIVE_GAME_SNAPSHOT_KEY = "TipIn.activeGameSnapshot";
+const ACTIVE_GAME_RESUME_KEY = "TipIn.activeGameResume";
+const ACTIVE_GAME_MARKER_KEY = "TipIn.activeGameMarker";
+const SCOREBOARD_GATEWAY_SETTINGS_KEY = "TipIn.scoreboardGatewaySettings";
 const DEFAULT_SCOREBOARD_GATEWAY_HOST = "192.168.68.66";
 const LEGACY_SCOREBOARD_GATEWAY_HOST = "192.168.68.69";
 const DEFAULT_SCOREBOARD_GATEWAY_PORT = "80";
 const VERBOSE_TRACE = false;
 const STORAGE_FALLBACK_DIR = new FileSystem.Directory(
   FileSystem.Paths.document,
-  "netfront-storage",
+  "TipIn-storage",
 );
 
 function storageFallbackFileForKey(key: string) {
@@ -5619,7 +5619,7 @@ export default function App() {
   async function fetchOfficialOptions(gameId: string) {
     const response = await fetch(
       `${activeApiBase}/games/${gameId}/officials/options-mobile`,
-      { headers: { "x-netfront-access-code": session?.code ?? "" } },
+      { headers: { "x-TipIn-access-code": session?.code ?? "" } },
     );
     const payload = await response.json().catch(() => []);
     if (!response.ok || !Array.isArray(payload)) {
@@ -5663,7 +5663,7 @@ export default function App() {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            "x-netfront-access-code": session.code,
+            "x-TipIn-access-code": session.code,
           },
           body: JSON.stringify({
             officialId,
@@ -5693,7 +5693,7 @@ export default function App() {
         `${activeApiBase}/games/${nextGame.gameId}/officials/${encodeURIComponent(role)}/assignment-mobile`,
         {
           method: "DELETE",
-          headers: { "x-netfront-access-code": session.code },
+          headers: { "x-TipIn-access-code": session.code },
         },
       );
       if (!response.ok) {
@@ -5774,7 +5774,7 @@ export default function App() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-netfront-access-code": session.code,
+            "x-TipIn-access-code": session.code,
           },
           body: JSON.stringify({
             ...addOfficialForm,
@@ -6174,7 +6174,7 @@ export default function App() {
     try {
       const response = await fetch(
         `${activeApiBase}/games/${game.gameId}/gateway-mobile`,
-        { headers: { "x-netfront-access-code": accessCode } },
+        { headers: { "x-TipIn-access-code": accessCode } },
       );
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

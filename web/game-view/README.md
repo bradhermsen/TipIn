@@ -1,4 +1,4 @@
-# NetFront GameView (Web)
+# TipIn GameView (Web)
 
 This module hosts the mobile-optimized web implementation for GameView.
 

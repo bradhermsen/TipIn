@@ -1,316 +1,316 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"label": "Run Functions Host",
-			"type": "shell",
-			"command": "func start --host 0.0.0.0",
-			"options": {
-				"cwd": "C:\\NetFront\\api\\NetFrontAPI"
-			},
-			"isBackground": true,
-			"problemMatcher": {
-				"owner": "azureFunctions",
-				"pattern": [
-					{
-						"regexp": ".*"
-					}
-				],
-				"background": {
-					"activeOnStart": true,
-					"beginsPattern": ".*Worker process started and initialized.*",
-					"endsPattern": ".*Host started.*"
-				}
-			}
-		},
-		{
-			"label": "Run Functions Host",
-			"type": "shell",
-			"command": "func start",
-			"isBackground": true
-		},
-		{
-			"label": "Live Verification Pass",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\verify_teamtype_stats_pdf_email.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Check sqlcmd",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Get-Command sqlcmd -ErrorAction SilentlyContinue | Select-Object Name,Source | Format-Table -AutoSize"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Apply TeamType Migration SQL",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\apply_teamtype_migration.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Apply TeamType Migration SQL",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\apply_teamtype_migration.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Apply TeamType Migration SQL",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\apply_teamtype_migration.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Apply TeamType Migration SQL",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\apply_teamtype_migration.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Live Verification Pass",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\verify_teamtype_stats_pdf_email.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Check Team Columns",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\check_team_columns.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Check Team Tables",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\check_team_tables.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Check Env Connection String",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Get-ChildItem Env:ConnectionStrings__DefaultConnection -ErrorAction SilentlyContinue | Select-Object Name,Value | Format-List"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Probe Teams Query",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\probe_teams_query.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Stop Functions Host",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Live Verification Pass",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\verify_teamtype_stats_pdf_email.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Quick Teams API Check",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"$base='http://localhost:7071/api'; $login=Invoke-RestMethod -Method Post -Uri \"$base/auth/login\" -ContentType 'application/json' -Body (@{email='hermiehockey@outlook.com';password='NetFront2024!'}|ConvertTo-Json); $h=@{Authorization=\"Bearer $($login.token)\"}; try { $t=Invoke-RestMethod -Method Get -Uri \"$base/teams\" -Headers $h; \"TeamsCount=$(@($t).Count)\" } catch { $_.Exception.Message }"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Quick Teams API Check",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\quick_teams_check.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Quick Teams API Check 2",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\quick_teams_check.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Stop Functions Host 2",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Live Verification Pass 2",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\verify_teamtype_stats_pdf_email.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Read Verification Results",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Get-Content c:\\NetFront\\Docs\\verify_live_results.json -Raw"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Stop Functions Host 3",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Live Verification Pass 3",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\verify_teamtype_stats_pdf_email.ps1"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Stop Functions Host 4",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-Command",
-				"Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
-			],
-			"isBackground": false
-		},
-		{
-			"label": "Live Verification Pass 4",
-			"type": "shell",
-			"command": "powershell",
-			"args": [
-				"-NoProfile",
-				"-ExecutionPolicy",
-				"Bypass",
-				"-File",
-				"c:\\NetFront\\Docs\\verify_teamtype_stats_pdf_email.ps1"
-			],
-			"isBackground": false
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Functions Host",
+      "type": "shell",
+      "command": "func start --host 0.0.0.0",
+      "options": {
+        "cwd": "C:\\TipIn\\api\\TipInAPI"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "azureFunctions",
+        "pattern": [
+          {
+            "regexp": ".*"
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*Worker process started and initialized.*",
+          "endsPattern": ".*Host started.*"
+        }
+      }
+    },
+    {
+      "label": "Run Functions Host",
+      "type": "shell",
+      "command": "func start",
+      "isBackground": true
+    },
+    {
+      "label": "Live Verification Pass",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\verify_teamtype_stats_pdf_email.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Check sqlcmd",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Command sqlcmd -ErrorAction SilentlyContinue | Select-Object Name,Source | Format-Table -AutoSize"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Apply TeamType Migration SQL",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\apply_teamtype_migration.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Apply TeamType Migration SQL",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\apply_teamtype_migration.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Apply TeamType Migration SQL",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\apply_teamtype_migration.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Apply TeamType Migration SQL",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\apply_teamtype_migration.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Live Verification Pass",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\verify_teamtype_stats_pdf_email.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Check Team Columns",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\check_team_columns.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Check Team Tables",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\check_team_tables.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Check Env Connection String",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-ChildItem Env:ConnectionStrings__DefaultConnection -ErrorAction SilentlyContinue | Select-Object Name,Value | Format-List"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Probe Teams Query",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\probe_teams_query.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Stop Functions Host",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Live Verification Pass",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\verify_teamtype_stats_pdf_email.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Quick Teams API Check",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "$base='http://localhost:7071/api'; $login=Invoke-RestMethod -Method Post -Uri \"$base/auth/login\" -ContentType 'application/json' -Body (@{email='hermiehockey@outlook.com';password='TipIn2024!'}|ConvertTo-Json); $h=@{Authorization=\"Bearer $($login.token)\"}; try { $t=Invoke-RestMethod -Method Get -Uri \"$base/teams\" -Headers $h; \"TeamsCount=$(@($t).Count)\" } catch { $_.Exception.Message }"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Quick Teams API Check",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\quick_teams_check.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Quick Teams API Check 2",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\quick_teams_check.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Stop Functions Host 2",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Live Verification Pass 2",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\verify_teamtype_stats_pdf_email.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Read Verification Results",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Content c:\\TipIn\\Docs\\verify_live_results.json -Raw"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Stop Functions Host 3",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Live Verification Pass 3",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\verify_teamtype_stats_pdf_email.ps1"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Stop Functions Host 4",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Process func -ErrorAction SilentlyContinue | Stop-Process -Force"
+      ],
+      "isBackground": false
+    },
+    {
+      "label": "Live Verification Pass 4",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "c:\\TipIn\\Docs\\verify_teamtype_stats_pdf_email.ps1"
+      ],
+      "isBackground": false
+    }
+  ]
 }

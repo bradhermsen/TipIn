@@ -1,19 +1,19 @@
-name: Deploy NetFront API Dev
+name: Deploy TipIn API Dev
 
 on:
   push:
     branches:
       - main
     paths:
-      - api/NetFrontAPI/**
-      - .github/workflows/deploy-netfront-api-dev.yml
+      - api/TipInAPI/**
+      - .github/workflows/deploy-TipIn-api-dev.yml
   workflow_dispatch:
 
 env:
   DOTNET_VERSION: 8.0.x
-  PROJECT_PATH: api/NetFrontAPI/NetFrontAPI.csproj
-  PUBLISH_DIR: api/NetFrontAPI/publish
-  FUNCTIONAPP_NAME: netfront-api-dev
+  PROJECT_PATH: api/TipInAPI/TipInAPI.csproj
+  PUBLISH_DIR: api/TipInAPI/publish
+  FUNCTIONAPP_NAME: TipIn-api-dev
 
 permissions:
   id-token: write
