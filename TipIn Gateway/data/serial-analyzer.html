@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Serial Protocol Analyzer</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --card-bg: #141a33;
+        --card-border: #1f274a;
+        --accent: #ff8c32;
+        --cyan: #38bdf8;
+        --text: #ffffff;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        padding: 20px;
+      }
+
+      .nav-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        background: var(--card-bg);
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--card-border);
+      }
+      .nav-bar a {
+        color: var(--cyan);
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 0.9rem;
+      }
+      .nav-bar a:hover,
+      .nav-bar a.active {
+        background: rgba(56, 189, 248, 0.15);
+        color: #fff;
+      }
+
+      h1 {
+        color: var(--accent);
+        margin-bottom: 15px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+      }
+      .col {
+        background: var(--card-bg);
+        border-radius: 8px;
+        padding: 20px;
+        border: 1px solid var(--card-border);
+      }
+
+      h2 {
+        color: var(--cyan);
+        font-size: 1.1rem;
+        border-bottom: 1px solid var(--card-border);
+        padding-bottom: 6px;
+        margin-bottom: 12px;
+      }
+
+      pre {
+        background: #000;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-family: monospace;
+        max-height: 250px;
+        overflow-y: auto;
+        color: #10b981;
+      }
+      .serial-trace-list {
+        background: #000;
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        margin-top: 10px;
+        max-height: 420px;
+        overflow-y: auto;
+      }
+      .serial-trace-row {
+        border-bottom: 1px solid #172033;
+        color: #10b981;
+        font-family: "Courier New", monospace;
+        font-size: 0.82rem;
+        overflow-wrap: anywhere;
+        padding: 8px 10px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .serial-trace-row:first-child {
+        background: #07190f;
+        color: #6ee7a8;
+      }
+      .serial-trace-empty {
+        color: #94a3b8;
+      }
+      .penalty-grid {
+        display: grid;
+        gap: 8px;
+      }
+      .penalty-row {
+        align-items: center;
+        background: #0b1020;
+        border: 1px solid var(--card-border);
+        border-radius: 6px;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: minmax(120px, 1fr) 72px 72px;
+        padding: 10px 12px;
+      }
+      .penalty-label {
+        color: var(--cyan);
+        font-weight: 700;
+      }
+      .penalty-player,
+      .penalty-time {
+        font-family: "Courier New", monospace;
+        text-align: right;
+      }
+      .penalty-time {
+        color: #10b981;
+        font-weight: 700;
+      }
+      .stat-val {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav-bar">
+      <a href="/">Admin</a>
+      <a href="/scoreboard-simulator.html">Scoreboard Simulator</a>
+      <a href="/serial-analyzer.html">Serial Port Analyzer</a>
+      <a href="/ws-diag.html">WS Diag</a>
+      <a href="/scoreboard-debug.html">Debug JSON</a>
+    </nav>
+
+    <h1>Serial Protocol Analyzer</h1>
+
+    <div class="row">
+      <div class="col">
+        <h2>Active Protocol</h2>
+        <div id="vendor" class="stat-val">--</div>
+
+        <h2 style="margin-top: 15px">Game Clock</h2>
+        <div id="clock" class="stat-val">--:--</div>
+        <p>
+          Clock Running:
+          <strong id="running" style="color: var(--cyan)">--</strong>
+        </p>
+
+        <h2 style="margin-top: 15px">Scores & Period</h2>
+        <p>Home Score: <span id="home">--</span></p>
+        <p>Away Score: <span id="away">--</span></p>
+        <p>Period: <span id="period">--</span></p>
+
+        <h2 style="margin-top: 15px">Shots</h2>
+        <p>
+          Home Shots: <span id="shotsHome">--</span> | Away Shots:
+          <span id="shotsAway">--</span>
+        </p>
+      </div>
+
+      <div class="col">
+        <h2>Daktronics Penalty Slots</h2>
+        <div id="penalties" class="penalty-grid">Loading penalty slots...</div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h2>Raw Serial RX Data Trace</h2>
+      <p>
+        UART: <strong id="serialConfig">--</strong> | RX Bytes:
+        <strong id="rxByteCount">0</strong> | Signal:
+        <strong id="rxStatus">WAITING</strong>
+      </p>
+      <div id="serialTrace" class="serial-trace-list">
+        <div class="serial-trace-row serial-trace-empty">
+          Waiting for serial frames...
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function renderSerialTrace(trace) {
+        const traceElement = document.getElementById("serialTrace");
+        const normalized = (trace || "")
+          .replace(/<CR>/g, "<CR>\n")
+          .replace(/<LF>/g, "<LF>\n")
+          .replace(/<03>/g, "<03>\n")
+          .replace(/<04>/g, "<04>\n");
+        const rows = normalized
+          .split(/\n+/)
+          .map((row) => row.trim())
+          .filter(Boolean)
+          .reverse()
+          .slice(0, 100);
+
+        traceElement.replaceChildren();
+
+        if (rows.length === 0) {
+          const emptyRow = document.createElement("div");
+          emptyRow.className = "serial-trace-row serial-trace-empty";
+          emptyRow.textContent = "(No serial trace data)";
+          traceElement.appendChild(emptyRow);
+          return;
+        }
+
+        rows.forEach((row) => {
+          const rowElement = document.createElement("div");
+          rowElement.className = "serial-trace-row";
+          rowElement.textContent = row;
+          traceElement.appendChild(rowElement);
+        });
+      }
+
+      function update() {
+        fetch("/serial.json")
+          .then((r) => r.json())
+          .then((o) => {
+            const vendors = ["Unknown", "Daktronics", "Nevco", "OES"];
+            document.getElementById("vendor").textContent =
+              vendors[o.vendor] || o.vendor;
+            document.getElementById("clock").textContent = o.clock || "--:--";
+            document.getElementById("running").textContent = o.running
+              ? "YES"
+              : "NO";
+
+            document.getElementById("home").textContent = o.home ?? "--";
+            document.getElementById("away").textContent = o.away ?? "--";
+            document.getElementById("period").textContent = o.period ?? "--";
+
+            document.getElementById("shotsHome").textContent =
+              o.shotsHome ?? "--";
+            document.getElementById("shotsAway").textContent =
+              o.shotsAway ?? "--";
+
+            document.getElementById("serialConfig").textContent =
+              `${o.baud || 9600} ${o.format || "8N1"}, RX GPIO${o.rxPin ?? 16}`;
+            document.getElementById("rxByteCount").textContent =
+              o.rxByteCount ?? 0;
+            const rxStatus = document.getElementById("rxStatus");
+            rxStatus.textContent = o.receiving ? "RECEIVING" : "WAITING";
+            rxStatus.style.color = o.receiving
+              ? "var(--success)"
+              : "var(--danger)";
+
+            const penaltySlots = [
+              { team: 0, slot: 1, label: "Home Penalty 1" },
+              { team: 0, slot: 2, label: "Home Penalty 2" },
+              { team: 1, slot: 1, label: "Away Penalty 1" },
+              { team: 1, slot: 2, label: "Away Penalty 2" },
+            ];
+            const penaltyContainer = document.getElementById("penalties");
+            penaltyContainer.replaceChildren();
+            penaltySlots.forEach((slot) => {
+              const penalty = (o.penalties || []).find(
+                (item) => item.team === slot.team && item.slot === slot.slot,
+              );
+              const row = document.createElement("div");
+              row.className = "penalty-row";
+
+              const label = document.createElement("span");
+              label.className = "penalty-label";
+              label.textContent = slot.label;
+
+              const player = document.createElement("span");
+              player.className = "penalty-player";
+              player.textContent = penalty ? `#${penalty.player}` : "--";
+
+              const time = document.createElement("span");
+              time.className = "penalty-time";
+              time.textContent = penalty
+                ? `${penalty.minutes}:${String(penalty.seconds).padStart(2, "0")}`
+                : "--:--";
+
+              row.append(label, player, time);
+              penaltyContainer.appendChild(row);
+            });
+            renderSerialTrace(o.serialTrace);
+          })
+          .catch(() => {});
+      }
+
+      setInterval(update, 500);
+      update();
+    </script>
+  </body>
+</html>

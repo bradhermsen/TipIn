@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">TipIn</title>
+  <desc id="desc">TipIn monogram with white T, orange I, and two white circles</desc>
+  <circle cx="64" cy="64" r="58" fill="none" stroke="#E8EDF5" stroke-width="4"/>
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#E8EDF5" stroke-width="2"/>
+  <path fill="#E8EDF5" d="M27 34h70l-5 17H70L56 96H37l14-45H22l5-17Z"/>
+  <path fill="#FF7B00" d="M75 55h19L81 96H62l13-41Z"/>
+</svg>
