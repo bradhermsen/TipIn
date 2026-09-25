@@ -1,6 +1,6 @@
 # Players vs Roster Behavior
 
-NetFront separates player data into two layers:
+TipIn separates player data into two layers:
 
 1. Players Page (global identity)
 2. Roster Page (team-specific identity)

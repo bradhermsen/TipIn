@@ -277,7 +277,7 @@ Do not refactor unrelated code.
 
 ---
 
-## NetFront‑Specific Rules
+## TipIn‑Specific Rules
 
 ### Dual Rostering
 

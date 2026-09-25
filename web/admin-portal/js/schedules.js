@@ -393,7 +393,7 @@ function updateManagedGatewayStatus() {
   document.getElementById("game-gateway-status").textContent = !rink
     ? "Select a rink to view scoreboard mode."
     : gateway || rink.gatewayAvailable
-      ? "NetFront Gateway configured for this rink."
+      ? "TipIn Gateway configured for this rink."
       : "No gateway configured. Game Manager will use manual scoreboard mode.";
 }
 

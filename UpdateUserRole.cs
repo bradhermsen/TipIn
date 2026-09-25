@@ -6,7 +6,7 @@ class Program
 {
     static void Main(string[] args)
     {
-        const string connectionString = "Server=netfront-sql.database.windows.net;Database=NetFrontDB;User Id=sa;Password=P@ssw0rd123!;Encrypt=true;TrustServerCertificate=false;Connection Timeout=30;";
+        const string connectionString = "Server=TipIn-sql.database.windows.net;Database=TipInDB;User Id=sa;Password=P@ssw0rd123!;Encrypt=true;TrustServerCertificate=false;Connection Timeout=30;";
         
         try
         {

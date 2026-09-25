@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-$settingsRaw = Get-Content 'c:\NetFront\api\NetFrontAPI\local.settings.json' -Raw
+$settingsRaw = Get-Content 'c:\TipIn\api\TipInAPI\local.settings.json' -Raw
 $match = [regex]::Match($settingsRaw, '"DefaultConnection"\s*:\s*"([^"]+)"')
 $connString = $match.Groups[1].Value
 $conn = New-Object System.Data.SqlClient.SqlConnection($connString)

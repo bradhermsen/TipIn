@@ -1,2 +1,3 @@
-# NetFront
+# TipIn
+
 Initial project setup.

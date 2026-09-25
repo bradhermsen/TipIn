@@ -1,41 +1,41 @@
 ﻿{
-    "updateInternalInheritance":  {
-                                      "teamId":  "a0aa0355-12e2-49e7-be10-4626b153e6f2",
-                                      "orgMascot":  "Packer",
-                                      "returnedTeamMascot":  "Packer",
-                                      "pass":  true
-                                  },
-    "createInvalidType":  {
-                              "status":  400,
-                              "pass":  true,
-                              "response":  "{\"error\":\"Team type is required and must be one of: Boys, Girls, Co-Ed, Men, Women.\"}"
-                          },
-    "createExternalWithoutMascot":  {
-                                        "status":  400,
-                                        "pass":  true,
-                                        "response":  "{\"error\":\"External teams require a team mascot.\"}"
-                                    },
-    "statsTypeFilter":  {
-                            "requestedType":  "Co-Ed",
-                            "rows":  8,
-                            "mismatchedRows":  0,
-                            "pass":  true
-                        },
-    "pdfCheck":  {
-                     "gameId":  "763f8192-c0e7-4c1b-a620-91f77e42f93c",
-                     "status":  "Final",
-                     "pdfPath":  "c:\\NetFront\\Docs\\verify-summary.pdf"
-                 },
-    "emailCheck":  {
-                       "completeEndpoint":  {
-                                                "gameId":  "763f8192-c0e7-4c1b-a620-91f77e42f93c",
-                                                "status":  "Final",
-                                                "emailRequested":  true,
-                                                "emailSent":  true,
-                                                "emailError":  null
-                                            },
-                       "mailhogFound":  true,
-                       "mailhogSubject":  "NetFront Game Finalized - Verification Pass",
-                       "mailhogBodySnippet":  "\r\n----boundary_0_a90b64a6-44c5-469a-a66b-51051d807536\r\nContent-Type: text/plain; charset=us-ascii\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nNetFront Game Manager - Finalized Game=0D=0A=0D=0AFinal: Away - R=\r\ned Wing Girls 9 - 15 Home - Winona Girls Winhawks=0D=0ALeague: MS=\r\nHSL=0D=0ATeam Type"
-                   }
+  "updateInternalInheritance": {
+    "teamId": "a0aa0355-12e2-49e7-be10-4626b153e6f2",
+    "orgMascot": "Packer",
+    "returnedTeamMascot": "Packer",
+    "pass": true
+  },
+  "createInvalidType": {
+    "status": 400,
+    "pass": true,
+    "response": "{\"error\":\"Team type is required and must be one of: Boys, Girls, Co-Ed, Men, Women.\"}"
+  },
+  "createExternalWithoutMascot": {
+    "status": 400,
+    "pass": true,
+    "response": "{\"error\":\"External teams require a team mascot.\"}"
+  },
+  "statsTypeFilter": {
+    "requestedType": "Co-Ed",
+    "rows": 8,
+    "mismatchedRows": 0,
+    "pass": true
+  },
+  "pdfCheck": {
+    "gameId": "763f8192-c0e7-4c1b-a620-91f77e42f93c",
+    "status": "Final",
+    "pdfPath": "c:\\TipIn\\Docs\\verify-summary.pdf"
+  },
+  "emailCheck": {
+    "completeEndpoint": {
+      "gameId": "763f8192-c0e7-4c1b-a620-91f77e42f93c",
+      "status": "Final",
+      "emailRequested": true,
+      "emailSent": true,
+      "emailError": null
+    },
+    "mailhogFound": true,
+    "mailhogSubject": "TipIn Game Finalized - Verification Pass",
+    "mailhogBodySnippet": "\r\n----boundary_0_a90b64a6-44c5-469a-a66b-51051d807536\r\nContent-Type: text/plain; charset=us-ascii\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nTipIn Game Manager - Finalized Game=0D=0A=0D=0AFinal: Away - R=\r\ned Wing Girls 9 - 15 Home - Winona Girls Winhawks=0D=0ALeague: MS=\r\nHSL=0D=0ATeam Type"
+  }
 }

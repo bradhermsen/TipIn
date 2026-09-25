@@ -1,6 +1,6 @@
 # Roster Sync Rules
 
-NetFront uses three layers of player data:
+TipIn uses three layers of player data:
 
 1. Players (global identity)
 2. PlayerTeams (team assignment)

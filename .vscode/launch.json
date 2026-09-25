@@ -6,16 +6,14 @@
       "type": "coreclr",
       "request": "attach",
       "processName": "dotnet",
-      "processCommandLineFilter": "NetFrontAPI.dll",
+      "processCommandLineFilter": "TipInAPI.dll",
       "justMyCode": true
     }
   ],
   "compounds": [
     {
       "name": "Start Functions + Attach Debugger",
-      "configurations": [
-        "Attach to Azure Functions (.NET Isolated)"
-      ],
+      "configurations": ["Attach to Azure Functions (.NET Isolated)"],
       "preLaunchTask": "Run Functions Host"
     }
   ]

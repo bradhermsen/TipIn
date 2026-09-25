@@ -1,7 +1,9 @@
-# NetFront Access Code Search Results
+# TipIn Access Code Search Results
 
 ## Executive Summary
+
 Access codes (GameManagerCode/ScorekeeperCode and StatManagerCode) are currently:
+
 - ✅ Generated client-side with random 6-character strings
 - ✅ Stored in the Teams table
 - ✅ Displayed in admin portal
@@ -15,9 +17,11 @@ Access codes (GameManagerCode/ScorekeeperCode and StatManagerCode) are currently
 ## 1. Code Generation
 
 ### Location
+
 **Frontend**: [web/admin-portal/js/teams.js](web/admin-portal/js/teams.js#L757-L770)
 
 ### Code Snippet
+
 ```javascript
 // Generate Access Codes (teams.js, line 757-770)
 document.addEventListener("click", (e) => {
@@ -32,6 +36,7 @@ document.addEventListener("click", (e) => {
 ```
 
 ### Generation Method
+
 - **Algorithm**: `Math.random().toString(36).substring(2, 8).toUpperCase()`
 - **Format**: 6-character alphanumeric string
 - **Example**: `A2K9ZX`, `B7L3MW`
@@ -39,6 +44,7 @@ document.addEventListener("click", (e) => {
 - **Complexity**: LOW - no special characters, predictable pattern
 
 ### Trigger
+
 - "Generate Access Codes" button in team edit modal
 - User manually clicks to generate new codes
 - NO auto-generation on team creation
@@ -48,16 +54,21 @@ document.addEventListener("click", (e) => {
 ## 2. Code Storage
 
 ### Database Location
+
 **Table**: `Teams`
 
 ### Columns
-| Column | Type | Property Name (Backend) | Notes |
-|--------|------|------------------------|-------|
-| ScorekeeperCode | varchar(?) | GameManagerCode | Displayed as "Scorekeeper Code" |
-| StatManagerCode | varchar(?) | StatManagerCode | Displayed as "Stat Manager Code" |
+
+| Column          | Type       | Property Name (Backend) | Notes                            |
+| --------------- | ---------- | ----------------------- | -------------------------------- |
+| ScorekeeperCode | varchar(?) | GameManagerCode         | Displayed as "Scorekeeper Code"  |
+| StatManagerCode | varchar(?) | StatManagerCode         | Displayed as "Stat Manager Code" |
 
 ### Model Definition
-**File**: [api/NetFrontAPI/Models/Team.cs](api/NetFrontAPI/Models/Team.cs)
+
+**File**: [api/
+API/Models/Team.cs](api/TipInAPI/Models/Team.cs)
+
 ```csharp
 public class Team
 {
@@ -65,20 +76,21 @@ public class Team
     public Guid OrganizationId { get; set; }
     public Guid LevelId { get; set; }
     // ... other properties ...
-    
+
     public string? GameManagerCode { get; set; }  // Maps to ScorekeeperCode
     public string? StatManagerCode { get; set; }
     public string? Notes { get; set; }
-    
+
     public bool IsActive { get; set; }
     public bool IsExternal { get; set; }
-    
+
     public int? SortOrder { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 ```
 
 ### Key Issues
+
 - No NOT NULL constraint
 - No UNIQUE constraint (codes can be duplicated)
 - No expiration/timestamp field
@@ -91,8 +103,9 @@ public class Team
 ### ❌ NO VALIDATION FOUND
 
 **Extensive search completed:**
+
 - ✅ Searched all C# Functions files
-- ✅ Searched all Services files  
+- ✅ Searched all Services files
 - ✅ Searched all Repositories files
 - ✅ Searched game endpoints
 - ✅ Searched frontend game-manager code
@@ -101,6 +114,7 @@ public class Team
 **Result**: No code validation endpoints or logic discovered.
 
 ### Codes Are NOT Used For:
+
 - Game entry authentication
 - Scorekeeper login
 - Stat manager login
@@ -112,27 +126,30 @@ public class Team
 ## 4. Code Management (Admin Portal)
 
 ### Display
+
 **File**: [web/admin-portal/screens/access-codes.html](web/admin-portal/screens/access-codes.html)
 
 **Features**:
+
 - Table showing all teams
 - Columns: Team Name, Organization, Scorekeeper Code, Stat Manager Code, Actions
 - Edit button for each team
 
 ### Load Function
+
 **File**: [web/admin-portal/js/access-codes.js](web/admin-portal/js/access-codes.js#L10-L32)
 
 ```javascript
 async function loadCodes() {
-    const res = await fetch("http://localhost:7071/api/teams");
-    const teams = await res.json();
+  const res = await fetch("http://localhost:7071/api/teams");
+  const teams = await res.json();
 
-    tbody.innerHTML = "";
+  tbody.innerHTML = "";
 
-    teams.forEach(t => {
-        const tr = document.createElement("tr");
+  teams.forEach((t) => {
+    const tr = document.createElement("tr");
 
-        tr.innerHTML = `
+    tr.innerHTML = `
             <td>${t.name}</td>
             <td>${t.organizationName}</td>
             <td style="text-align:center;"><code style="color:#FFB300;">${t.gameManagerCode}</code></td>
@@ -142,61 +159,67 @@ async function loadCodes() {
             </td>
         `;
 
-        tbody.appendChild(tr);
-    });
+    tbody.appendChild(tr);
+  });
 
-    document.querySelectorAll(".edit-btn").forEach(btn =>
-        btn.addEventListener("click", () => openEditModal(btn.dataset.id))
+  document
+    .querySelectorAll(".edit-btn")
+    .forEach((btn) =>
+      btn.addEventListener("click", () => openEditModal(btn.dataset.id)),
     );
 }
 ```
 
 ### Edit Modal
+
 **File**: [web/admin-portal/js/access-codes.js](web/admin-portal/js/access-codes.js#L34-L49)
 
 ```javascript
 async function openEditModal(id) {
-    editingTeamId = id;
+  editingTeamId = id;
 
-    const res = await fetch(`http://localhost:7071/api/teams/${id}`);
-    const t = await res.json();
+  const res = await fetch(`http://localhost:7071/api/teams/${id}`);
+  const t = await res.json();
 
-    modalTitle.textContent = `Edit Codes — ${t.name}`;
+  modalTitle.textContent = `Edit Codes — ${t.name}`;
 
-    scoreInput.value = t.gameManagerCode;
-    statInput.value = t.statManagerCode;
+  scoreInput.value = t.gameManagerCode;
+  statInput.value = t.statManagerCode;
 
-    modal.classList.remove("hidden");
+  modal.classList.remove("hidden");
 }
 ```
 
 ### Save Function
+
 **File**: [web/admin-portal/js/access-codes.js](web/admin-portal/js/access-codes.js#L51-L62)
 
 ```javascript
 async function saveCodes() {
-    const payload = {
-        gameManagerCode: scoreInput.value,
-        statManagerCode: statInput.value
-    };
+  const payload = {
+    gameManagerCode: scoreInput.value,
+    statManagerCode: statInput.value,
+  };
 
-    await fetch(`http://localhost:7071/api/teams/${editingTeamId}/codes`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
+  await fetch(`http://localhost:7071/api/teams/${editingTeamId}/codes`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
-    modal.classList.add("hidden");
-    loadCodes();
+  modal.classList.add("hidden");
+  loadCodes();
 }
 ```
 
 ### ⚠️ CRITICAL ISSUE
+
 The save function calls: `PUT /api/teams/{id}/codes`
 
 **This endpoint DOES NOT EXIST in TeamsFunctions.cs**
 
 Only available endpoints are:
+
 - `GET /api/teams`
 - `GET /api/teams/{id}`
 - `PUT /api/teams/{id}` (full team update)
@@ -208,9 +231,11 @@ Only available endpoints are:
 ## 5. Backend API Endpoints
 
 ### TeamsFunctions.cs
-**File**: [api/NetFrontAPI/Functions/TeamsFunctions.cs](api/NetFrontAPI/Functions/TeamsFunctions.cs)
+
+**File**: [api/TipInAPI/Functions/TeamsFunctions.cs](api/TipInAPI/Functions/TeamsFunctions.cs)
 
 #### GetTeams
+
 ```csharp
 [Function("GetTeams")]
 public async Task<HttpResponseData> GetTeams(
@@ -222,9 +247,11 @@ public async Task<HttpResponseData> GetTeams(
     return response;
 }
 ```
+
 **Returns**: All teams with GameManagerCode and StatManagerCode
 
 #### GetTeamById
+
 ```csharp
 [Function("GetTeamById")]
 public async Task<HttpResponseData> GetTeamById(
@@ -234,15 +261,17 @@ public async Task<HttpResponseData> GetTeamById(
     var team = await _service.GetByIdAsync(id);
     if (team == null)
         return req.CreateResponse(HttpStatusCode.NotFound);
-    
+
     var response = req.CreateResponse(HttpStatusCode.OK);
     await response.WriteAsJsonAsync(team);
     return response;
 }
 ```
+
 **Returns**: Single team detail with codes
 
 #### UpdateTeam
+
 ```csharp
 [Function("UpdateTeam")]
 public async Task<HttpResponseData> UpdateTeam(
@@ -254,6 +283,7 @@ public async Task<HttpResponseData> UpdateTeam(
     return req.CreateResponse(HttpStatusCode.NoContent);
 }
 ```
+
 **Use**: Requires full TeamCreateUpdateDto (includes all team properties)
 **Codes**: Updated via `GameManagerCode` and `StatManagerCode` properties
 
@@ -262,11 +292,13 @@ public async Task<HttpResponseData> UpdateTeam(
 ## 6. Repository Layer
 
 ### TeamsRepository.cs
-**File**: [api/NetFrontAPI/Repositories/TeamsRepository.cs](api/NetFrontAPI/Repositories/TeamsRepository.cs)
+
+**File**: [api/TipInAPI/Repositories/TeamsRepository.cs](api/TipInAPI/Repositories/TeamsRepository.cs)
 
 #### GetAllAsync - SQL Select
+
 ```sql
-SELECT 
+SELECT
     t.Id AS TeamId,
     t.OrganizationId,
     t.LevelId,
@@ -291,6 +323,7 @@ ORDER BY t.SortOrder, t.Name
 ```
 
 #### CreateAsync - INSERT
+
 ```sql
 INSERT INTO Teams (
     Id,
@@ -311,6 +344,7 @@ VALUES (@Id, @OrganizationId, ..., @GameManagerCode, @StatManagerCode, ...)
 ```
 
 #### UpdateAsync - UPDATE
+
 ```sql
 UPDATE Teams
 SET
@@ -330,7 +364,8 @@ WHERE Id = @Id
 ## 7. DTO Definitions
 
 ### TeamCreateUpdateDto
-**File**: [api/NetFrontAPI/DTOs/TeamCreateUpdateDto.cs](api/NetFrontAPI/DTOs/TeamCreateUpdateDto.cs)
+
+**File**: [api/TipInAPI/DTOs/TeamCreateUpdateDto.cs](api/TipInAPI/DTOs/TeamCreateUpdateDto.cs)
 
 ```csharp
 public class TeamCreateUpdateDto
@@ -341,26 +376,27 @@ public class TeamCreateUpdateDto
     public string? Name { get; set; }
     public string? Gender { get; set; }
     public string? Abbreviation { get; set; }
-    
+
     // Coach fields...
     public string? HeadCoachName { get; set; }
     public string? HeadCoachEmail { get; set; }
     // ... assistant coaches ...
-    
+
     public bool AssistantCoach1HasLogin { get; set; }
     // ... more coach login flags ...
-    
+
     public string? Notes { get; set; }
     public string? GameManagerCode { get; set; }      // ← Code property
     public string? StatManagerCode { get; set; }      // ← Code property
-    
+
     public bool IsExternal { get; set; }
     public bool IsActive { get; set; }
 }
 ```
 
 ### TeamDetailDto
-**File**: [api/NetFrontAPI/DTOs/TeamDetailDto.cs](api/NetFrontAPI/DTOs/TeamDetailDto.cs)
+
+**File**: [api/TipInAPI/DTOs/TeamDetailDto.cs](api/TipInAPI/DTOs/TeamDetailDto.cs)
 
 ```csharp
 public class TeamDetailDto
@@ -370,20 +406,20 @@ public class TeamDetailDto
     public Guid LevelId { get; set; }
     public string LevelName { get; set; }
     public Guid SeasonId { get; set; }
-    
+
     public string? Name { get; set; }
     public string? Gender { get; set; }
     public string? Abbreviation { get; set; }
-    
+
     // Coach fields...
     public string? HeadCoachName { get; set; }
     public string? HeadCoachEmail { get; set; }
     // ...
-    
+
     public string? Notes { get; set; }
     public string? GameManagerCode { get; set; }      // ← Code property
     public string? StatManagerCode { get; set; }      // ← Code property
-    
+
     public bool IsExternal { get; set; }
     public bool IsActive { get; set; }
     public int RosterCount { get; set; }
@@ -391,10 +427,12 @@ public class TeamDetailDto
 ```
 
 ### TeamsListItemDto
-**File**: [api/NetFrontAPI/DTOs/TeamsListItemDto.cs](api/NetFrontAPI/DTOs/TeamsListItemDto.cs)
+
+**File**: [api/TipInAPI/DTOs/TeamsListItemDto.cs](api/TipInAPI/DTOs/TeamsListItemDto.cs)
 
 Contains:
-- `GameManagerCode` 
+
+- `GameManagerCode`
 - `StatManagerCode`
 
 ---
@@ -402,6 +440,7 @@ Contains:
 ## 8. Admin Portal UI Integration
 
 ### Teams Edit Modal
+
 **File**: [web/admin-portal/js/page-content.js](web/admin-portal/js/page-content.js#L180-L208)
 
 ```html
@@ -430,14 +469,17 @@ Contains:
 ```
 
 **Behavior**:
+
 - Displays codes as readonly fields
 - "Generate Access Codes" button generates 6-char random strings
 - Codes are saved with full team update
 
 ### Teams Display
+
 **File**: [web/admin-portal/js/teams.js](web/admin-portal/js/teams.js#L300-L310)
 
 Displays codes with badges:
+
 ```javascript
 <div class="code-badge sm-code">SM-${team.statManagerCode ?? ""}</div>
 ```
@@ -446,16 +488,16 @@ Displays codes with badges:
 
 ## 9. Summary Table: Code Flow
 
-| Operation | Location | Method | Status |
-|-----------|----------|--------|--------|
-| **Generate** | teams.js | Client-side random | ✅ Working |
-| **Display** | access-codes.html | GET /api/teams | ✅ Working |
-| **Update Single Code** | access-codes.js | PUT /api/teams/{id}/codes | ❌ **MISSING** |
-| **Update with Team** | page-content.js | PUT /api/teams/{id} | ✅ Working |
-| **Store** | TeamsRepository | INSERT/UPDATE Teams | ✅ Working |
-| **Retrieve** | TeamsRepository | SELECT Teams | ✅ Working |
-| **Validate/Use** | Game endpoints | (not found) | ❌ **NOT IMPLEMENTED** |
-| **Expire** | (none) | - | ❌ **NOT IMPLEMENTED** |
+| Operation              | Location          | Method                    | Status                 |
+| ---------------------- | ----------------- | ------------------------- | ---------------------- |
+| **Generate**           | teams.js          | Client-side random        | ✅ Working             |
+| **Display**            | access-codes.html | GET /api/teams            | ✅ Working             |
+| **Update Single Code** | access-codes.js   | PUT /api/teams/{id}/codes | ❌ **MISSING**         |
+| **Update with Team**   | page-content.js   | PUT /api/teams/{id}       | ✅ Working             |
+| **Store**              | TeamsRepository   | INSERT/UPDATE Teams       | ✅ Working             |
+| **Retrieve**           | TeamsRepository   | SELECT Teams              | ✅ Working             |
+| **Validate/Use**       | Game endpoints    | (not found)               | ❌ **NOT IMPLEMENTED** |
+| **Expire**             | (none)            | -                         | ❌ **NOT IMPLEMENTED** |
 
 ---
 
@@ -508,25 +550,28 @@ Displays codes with badges:
 ## 11. Files Summary
 
 ### Backend Files
-| File | Purpose | Status |
-|------|---------|--------|
-| [Models/Team.cs](api/NetFrontAPI/Models/Team.cs) | Model definition | ✅ Has code properties |
-| [DTOs/TeamCreateUpdateDto.cs](api/NetFrontAPI/DTOs/TeamCreateUpdateDto.cs) | Input DTO | ✅ Has code properties |
-| [DTOs/TeamDetailDto.cs](api/NetFrontAPI/DTOs/TeamDetailDto.cs) | Output DTO | ✅ Has code properties |
-| [DTOs/TeamsListItemDto.cs](api/NetFrontAPI/DTOs/TeamsListItemDto.cs) | List DTO | ✅ Has code properties |
-| [Functions/TeamsFunctions.cs](api/NetFrontAPI/Functions/TeamsFunctions.cs) | API endpoints | ⚠️ Missing /codes endpoint |
-| [Services/TeamsService.cs](api/NetFrontAPI/Services/TeamsService.cs) | Business logic | ✅ Passes through DTO |
-| [Repositories/TeamsRepository.cs](api/NetFrontAPI/Repositories/TeamsRepository.cs) | Database access | ✅ Stores/retrieves codes |
+
+| File                                                                            | Purpose          | Status                     |
+| ------------------------------------------------------------------------------- | ---------------- | -------------------------- |
+| [Models/Team.cs](api/TipInAPI/Models/Team.cs)                                   | Model definition | ✅ Has code properties     |
+| [DTOs/TeamCreateUpdateDto.cs](api/TipInAPI/DTOs/TeamCreateUpdateDto.cs)         | Input DTO        | ✅ Has code properties     |
+| [DTOs/TeamDetailDto.cs](api/TipInAPI/DTOs/TeamDetailDto.cs)                     | Output DTO       | ✅ Has code properties     |
+| [DTOs/TeamsListItemDto.cs](api/TipInAPI/DTOs/TeamsListItemDto.cs)               | List DTO         | ✅ Has code properties     |
+| [Functions/TeamsFunctions.cs](api/TipInAPI/Functions/TeamsFunctions.cs)         | API endpoints    | ⚠️ Missing /codes endpoint |
+| [Services/TeamsService.cs](api/TipInAPI/Services/TeamsService.cs)               | Business logic   | ✅ Passes through DTO      |
+| [Repositories/TeamsRepository.cs](api/TipInAPI/Repositories/TeamsRepository.cs) | Database access  | ✅ Stores/retrieves codes  |
 
 ### Frontend Files
-| File | Purpose | Status |
-|------|---------|--------|
-| [web/admin-portal/screens/access-codes.html](web/admin-portal/screens/access-codes.html) | Code management UI | ✅ Display page |
-| [web/admin-portal/js/access-codes.js](web/admin-portal/js/access-codes.js) | Code logic | ❌ Calls non-existent endpoint |
-| [web/admin-portal/js/teams.js](web/admin-portal/js/teams.js) | Team management | ✅ Code generation |
-| [web/admin-portal/js/page-content.js](web/admin-portal/js/page-content.js) | Team modal | ✅ Code display |
+
+| File                                                                                     | Purpose            | Status                         |
+| ---------------------------------------------------------------------------------------- | ------------------ | ------------------------------ |
+| [web/admin-portal/screens/access-codes.html](web/admin-portal/screens/access-codes.html) | Code management UI | ✅ Display page                |
+| [web/admin-portal/js/access-codes.js](web/admin-portal/js/access-codes.js)               | Code logic         | ❌ Calls non-existent endpoint |
+| [web/admin-portal/js/teams.js](web/admin-portal/js/teams.js)                             | Team management    | ✅ Code generation             |
+| [web/admin-portal/js/page-content.js](web/admin-portal/js/page-content.js)               | Team modal         | ✅ Code display                |
 
 ### No Game-Manager/Game-View Usage
+
 - No code validation in game entry
 - No tablet app authentication with codes
 - No scorekeeper/stat manager role enforcement via codes
@@ -536,12 +581,14 @@ Displays codes with badges:
 ## Recommendations
 
 ### Immediate Fixes Needed
+
 1. Create missing endpoint: `PUT /api/teams/{id}/codes`
 2. Add code validation to game endpoints
 3. Add uniqueness constraint to database
 4. Implement code validation service
 
 ### Future Enhancements
+
 1. Add expiration timestamps
 2. Implement cryptographically secure generation
 3. Add audit logging

@@ -154,7 +154,7 @@ String readTextFile(const char *path) {
 
 WifiSettings loadWifiSettings() {
     WifiSettings settings;
-    prefs.begin("netfront", true);
+    prefs.begin("TipIn", true);
     settings.ssid = prefs.getString("wifi_ssid", "");
     settings.security = prefs.getString("wifi_security", "personal");
     settings.password = prefs.getString("wifi_pass", "");
@@ -220,7 +220,7 @@ void beginWifiConnection(const WifiSettings &settings, bool keepSetupAp) {
 }
 
 void saveWifiSettings(const WifiSettings &settings) {
-    prefs.begin("netfront", false);
+    prefs.begin("TipIn", false);
     prefs.putString("wifi_ssid", settings.ssid);
     prefs.putString("wifi_security", settings.security);
     prefs.putString("wifi_pass", settings.password);
@@ -259,7 +259,7 @@ void triggerRestart(int delayMs) {
 void clearFactorySettingsAndRestart(const String &reason) {
     logMsg("[Factory Reset] " + reason + " - clearing stored settings...");
 
-    prefs.begin("netfront", false);
+    prefs.begin("TipIn", false);
     prefs.clear();
     prefs.end();
     LittleFS.remove(WIFI_CA_CERT_PATH);
@@ -403,7 +403,7 @@ void buildStateJson(JsonDocument &doc) {
     doc["running"] = clockRunning;
     doc["shotsHome"] = homeShots;
     doc["shotsAway"] = awayShots;
-    doc["schema"] = "netfront.full.v1";
+    doc["schema"] = "TipIn.full.v1";
 }
 
 void buildClockOnlyJson(JsonDocument &doc) {
@@ -424,7 +424,7 @@ void buildClockOnlyJson(JsonDocument &doc) {
     doc["clockSec"] = clockSec;
     doc["clockTenths"] = clockTenths;
     doc["period"] = currentPeriod;
-    doc["schema"] = "netfront.clock.v1";
+    doc["schema"] = "TipIn.clock.v1";
 }
 
 void buildLegacySerialJson(JsonDocument &doc) {
@@ -596,7 +596,7 @@ void setup() {
     scoreboard_begin();
 
     // Load credentials from NVS
-    prefs.begin("netfront", false);
+    prefs.begin("TipIn", false);
     adminPass = prefs.getString("admin_pass", "admin");
     wsAuthSecret = prefs.getString("ws_secret", wsAuthSecret);
     prefs.end();
@@ -873,7 +873,7 @@ void setup() {
             if (cmd == "changePass") {
                 String newPass = doc["newPass"] | "";
                 if (newPass.length() > 0) {
-                    prefs.begin("netfront", false);
+                    prefs.begin("TipIn", false);
                     prefs.putString("admin_pass", newPass);
                     prefs.end();
                     adminPass = newPass;
@@ -891,7 +891,7 @@ void setup() {
                     return;
                 }
 
-                prefs.begin("netfront", false);
+                prefs.begin("TipIn", false);
                 prefs.putString("ws_secret", newToken);
                 prefs.end();
                 wsAuthSecret = newToken;

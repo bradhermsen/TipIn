@@ -1,8 +1,8 @@
-IF DB_NAME() <> N'NetFrontDB'
-    THROW 50000, 'Wrong database. Connect the query window to NetFrontDB before running this script.', 1;
+IF DB_NAME() <> N'TipInDB'
+    THROW 50000, 'Wrong database. Connect the query window to TipInDB before running this script.', 1;
 
 IF OBJECT_ID(N'dbo.Organizations', N'U') IS NULL OR OBJECT_ID(N'dbo.Games', N'U') IS NULL
-    THROW 50001, 'NetFrontDB is missing the required dbo.Organizations or dbo.Games table.', 1;
+    THROW 50001, 'TipInDB is missing the required dbo.Organizations or dbo.Games table.', 1;
 
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;

@@ -1,9 +1,0 @@
-{
-  "profiles": {
-    "NetFrontAPI": {
-      "commandName": "Project",
-      "commandLineArgs": "--port 7109",
-      "launchBrowser": false
-    }
-  }
-}

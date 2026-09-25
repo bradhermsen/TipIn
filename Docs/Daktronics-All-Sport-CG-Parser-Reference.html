@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>NetFront ESP32 Hardware and Daktronics Parser Reference</title>
+    <title>TipIn ESP32 Hardware and Daktronics Parser Reference</title>
     <style>
       @page {
         size: letter;
@@ -132,7 +132,7 @@
   </head>
   <body>
     <header>
-      <h1>NetFront ESP32 Hardware and Daktronics Parser Reference</h1>
+      <h1>TipIn ESP32 Hardware and Daktronics Parser Reference</h1>
       <p class="subtitle">
         Scoreboard bridge pinout, power, interfaces, and All Sport CG CONTROL
         feed mapping
@@ -197,7 +197,7 @@
           <td><code>GPIO0 / BOOT</code></td>
           <td>Input with internal pull-up; active LOW</td>
           <td>
-            Hold BOOT for 7 seconds while firmware is running to clear NetFront
+            Hold BOOT for 7 seconds while firmware is running to clear TipIn
             preferences and Wi-Fi credentials, then restart. Holding BOOT during
             reset enters the ESP32 ROM bootloader instead.
           </td>
@@ -414,9 +414,8 @@ Daktronics CG DB-9 (RS-232)           MAX3232                 ESP32 Dev Module
         <tr>
           <td>Hold <code>BOOT</code> for at least 7 seconds while running</td>
           <td>
-            Firmware factory reset: clears the <code>netfront</code> NVS
-            namespace and cached Wi-Fi credentials, then reboots into default AP
-            mode.
+            Firmware factory reset: clears the <code>TipIn</code> NVS namespace
+            and cached Wi-Fi credentials, then reboots into default AP mode.
           </td>
         </tr>
         <tr>
@@ -460,9 +459,8 @@ Daktronics CG DB-9 (RS-232)           MAX3232                 ESP32 Dev Module
         <tr>
           <td>Persistent settings</td>
           <td>
-            ESP32 NVS/Preferences namespace <code>netfront</code>: admin
-            password, WebSocket token, SSID/password, DHCP/static IP, gateway,
-            and subnet
+            ESP32 NVS/Preferences namespace <code>TipIn</code>: admin password,
+            WebSocket token, SSID/password, DHCP/static IP, gateway, and subnet
           </td>
         </tr>
         <tr>
@@ -896,8 +894,8 @@ Daktronics CG DB-9 (RS-232)           MAX3232                 ESP32 Dev Module
     </table>
 
     <footer>
-      NetFront ESP32 Scoreboard Bridge documentation. Generated 2026-08-10 from
-      the confirmed Daktronics All Sport CG feed mapping.
+      TipIn ESP32 Scoreboard Bridge documentation. Generated 2026-08-10 from the
+      confirmed Daktronics All Sport CG feed mapping.
     </footer>
   </body>
 </html>

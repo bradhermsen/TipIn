@@ -2,7 +2,7 @@
 
 Date: 2026-08-03
 
-This module is wired to currently available NetFront API routes.
+This module is wired to currently available TipIn API routes.
 
 ## Implemented Route Mapping
 

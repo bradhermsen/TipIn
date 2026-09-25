@@ -29,9 +29,9 @@ The replacement tablet should load the same active game, reconnect to the ESP32,
 | Period from hardware feed              | Physical scoreboard through the ESP32 |
 | Scores and shots from hardware feed    | Physical scoreboard through the ESP32 |
 | Hardware penalty slots                 | Physical scoreboard through the ESP32 |
-| Game identity and scheduled teams      | NetFront API/database                 |
-| Rosters and player information         | NetFront API/database                 |
-| Submitted game events                  | NetFront API/database                 |
+| Game identity and scheduled teams      | TipIn API/database                    |
+| Rosters and player information         | TipIn API/database                    |
+| Submitted game events                  | TipIn API/database                    |
 | Unsaved form entries and UI selections | Failed tablet only; not recoverable   |
 
 The replacement tablet must treat the ESP32 as authoritative for hardware-fed values. It must not push an older locally cached or database clock value back over the current feed.
