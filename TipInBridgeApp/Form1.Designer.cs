@@ -1,4 +1,4 @@
-﻿namespace NetFrontBridgeApp;
+﻿namespace TipInBridgeApp;
 
 partial class Form1
 {
