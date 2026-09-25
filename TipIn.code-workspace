@@ -4,10 +4,6 @@
 			"name": "TipIn",
 			"path": "."
 		},
-		{
-			"name": "TipIn Gateway",
-			"path": "../Users/bradh/OneDrive/Documents/PlatformIO/Projects/TipIn Gateway"
-		}
 	],
 	"settings": {
 		"debug.internalConsoleOptions": "neverOpen"
