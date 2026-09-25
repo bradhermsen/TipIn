@@ -23,6 +23,12 @@ import "../styles/game-view.css";
 
 const FINAL_STATUS_KEYS = new Set(["final", "completed", "closed"]);
 
+type GameDetailStaticData = {
+  teams: Awaited<ReturnType<typeof getTeams>>;
+  rosterBundle: Awaited<ReturnType<typeof getPublicGameRosters>>;
+  coachesBundle: Awaited<ReturnType<typeof getPublicGameCoaches>>;
+};
+
 function readGameIdFromLocation() {
   if (typeof window === "undefined") return "";
   const params = new URLSearchParams(window.location.search);
@@ -186,6 +192,7 @@ export function GameDetailScreen() {
     useState<ApiGameSummaryReport | null>(null);
   const [goalieStatsNotice, setGoalieStatsNotice] = useState("");
   const rosterTabInitializedRef = useRef(false);
+  const staticDataRef = useRef<GameDetailStaticData | null>(null);
 
   const gameId = useMemo(() => readGameIdFromLocation(), []);
   const selectedTeamId = useMemo(() => readSelectedTeamIdFromLocation(), []);
@@ -216,20 +223,35 @@ export function GameDetailScreen() {
       }
 
       try {
-        const game = await getGameById(gameId);
-        const [summary, teams, rosterBundle, coachesBundle, reportResult] =
-          await Promise.all([
-            getGameSummaryMobile(gameId),
-            getTeams(),
-            getPublicGameRosters(gameId),
-            getPublicGameCoaches(gameId).catch(() => ({
-              homeCoaches: [],
-              awayCoaches: [],
-            })),
-            getGameSummaryReport(gameId)
+        const staticDataPromise = staticDataRef.current
+          ? Promise.resolve(staticDataRef.current)
+          : Promise.all([
+              getTeams(),
+              getPublicGameRosters(gameId),
+              getPublicGameCoaches(gameId).catch(() => ({
+                homeCoaches: [],
+                awayCoaches: [],
+              })),
+            ]).then(([teams, rosterBundle, coachesBundle]) => ({
+              teams,
+              rosterBundle,
+              coachesBundle,
+            }));
+
+        const [game, summary, staticData] = await Promise.all([
+          getGameById(gameId),
+          getGameSummaryMobile(gameId),
+          staticDataPromise,
+        ]);
+        staticDataRef.current = staticData;
+        const { teams, rosterBundle, coachesBundle } = staticData;
+        const shouldLoadReport =
+          !isBackgroundRefresh || isFinalStatus(String(game.status || ""));
+        const reportResult = shouldLoadReport
+          ? await getGameSummaryReport(gameId)
               .then((report) => ({ ok: true as const, report }))
-              .catch(() => ({ ok: false as const, report: null })),
-          ]);
+              .catch(() => ({ ok: false as const, report: null }))
+          : null;
 
         if (cancelled) return;
 
@@ -373,12 +395,12 @@ export function GameDetailScreen() {
           rosterTabInitializedRef.current = true;
         }
 
-        const report = reportResult.report;
+        const report = reportResult?.report ?? null;
         setHomeRoster(rosterBundle.homeRoster);
         setAwayRoster(rosterBundle.awayRoster);
         setHomeCoaches(coachesBundle.homeCoaches);
         setAwayCoaches(coachesBundle.awayCoaches);
-        setSummaryReport(report);
+        if (reportResult) setSummaryReport(report);
         setGoalieStatsNotice(rosterBundle.goalieStatsNotice || "");
 
         const mappedEvents = [

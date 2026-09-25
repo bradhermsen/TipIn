@@ -131,15 +131,20 @@ export function GameManagerMarketingScreen() {
 
       <section className="game-manager-feature-focus">
         <div className="game-manager-feature-focus-image">
-          <img src={loginImage} alt="TipIn Game Manager secure access-code login" />
+          <img
+            src={loginImage}
+            alt="TipIn Game Manager secure access-code login"
+          />
         </div>
         <div className="game-manager-marketing-step-copy">
           <span>Secure access</span>
-          <h2>Get the right person into the right game without another password.</h2>
+          <h2>
+            Get the right person into the right game without another password.
+          </h2>
           <p>
-            Game Managers log in with a unique access code provided by the organization
-            administrator — no passwords, no friction. Enter the code and the scheduled game
-            is ready to manage.
+            Game Managers log in with a unique access code provided by the
+            organization administrator — no passwords, no friction. Enter the
+            code and the scheduled game is ready to manage.
           </p>
         </div>
       </section>
@@ -208,15 +213,18 @@ export function GameManagerMarketingScreen() {
 
       <section className="game-manager-feature-focus game-manager-feature-focus-reverse">
         <div className="game-manager-feature-focus-image game-manager-feature-focus-image-wide">
-          <img src={activeClockImage} alt="TipIn Game Manager active clock and period tracking dashboard" />
+          <img
+            src={activeClockImage}
+            alt="TipIn Game Manager active clock and period tracking dashboard"
+          />
         </div>
         <div className="game-manager-marketing-step-copy">
           <span>Active clock &amp; period tracking</span>
           <h2>The game state stays visible while the game keeps moving.</h2>
           <p>
-            With the clock running, period progression and strength situation — Even Strength,
-            Power Play, or Short-Handed — update automatically. Live game state flows to TipIn
-            GameView as the action unfolds.
+            With the clock running, period progression and strength situation —
+            Even Strength, Power Play, or Short-Handed — update automatically.
+            Live game state flows to TipIn GameView as the action unfolds.
           </p>
         </div>
       </section>
@@ -450,7 +458,8 @@ export function GameManagerMarketingScreen() {
             ) : null}
           </div>
           <p className="game-manager-pilot-privacy">
-            We’ll use these details only to contact you about the 2026–2027 TipIn Game Manager pilot.
+            We’ll use these details only to contact you about the 2026–2027
+            TipIn Game Manager pilot.
           </p>
         </form>
       </section>
