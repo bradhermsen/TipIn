@@ -18,3 +18,11 @@ obj/
 # IDE
 .DS_Store
 Thumbs.db
+
+!TipIn Gateway/
+!TipIn Gateway/src/
+!TipIn Gateway/include/
+!TipIn Gateway/lib/
+!TipIn Gateway/data/
+!TipIn Gateway/test/
+!TipIn Gateway/platformio.ini
