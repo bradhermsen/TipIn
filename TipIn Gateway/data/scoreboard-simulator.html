@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scoreboard Simulator</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --card-bg: #141a33;
+        --card-border: #1f274a;
+        --accent: #ff8c32;
+        --cyan: #38bdf8;
+        --text: #ffffff;
+        --text-muted: #94a3b8;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        padding: 20px;
+      }
+
+      .nav-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        background: var(--card-bg);
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--card-border);
+      }
+      .nav-bar a {
+        color: var(--cyan);
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 0.9rem;
+      }
+      .nav-bar a:hover,
+      .nav-bar a.active {
+        background: rgba(56, 189, 248, 0.15);
+        color: #fff;
+      }
+
+      h1 {
+        color: var(--accent);
+        margin-bottom: 15px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+      }
+      .col {
+        background: var(--card-bg);
+        border-radius: 10px;
+        padding: 20px;
+        border: 1px solid var(--card-border);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      h2 {
+        color: var(--cyan);
+        font-size: 1.1rem;
+        border-bottom: 1px solid var(--card-border);
+        padding-bottom: 6px;
+      }
+      .preview {
+        font-size: 2.2rem;
+        font-weight: bold;
+        color: var(--accent);
+        font-family: monospace;
+        text-align: center;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 10px;
+        border-radius: 6px;
+      }
+
+      input[type="number"] {
+        padding: 6px;
+        border-radius: 4px;
+        border: 1px solid var(--card-border);
+        background: #000;
+        color: #fff;
+        width: 60px;
+        text-align: center;
+      }
+
+      /* Stepper Button Controls (+/-) */
+      .stepper-control {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--card-border);
+      }
+      .stepper-control label {
+        font-weight: bold;
+        color: var(--text-muted);
+      }
+      .stepper-btns {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .btn-step {
+        width: 36px;
+        height: 36px;
+        font-size: 1.2rem;
+        padding: 0;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        background: var(--accent);
+        color: #000;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
+        user-select: none;
+      }
+      .btn-step:hover {
+        background: #ffa64d;
+      }
+      .btn-step:active {
+        transform: scale(0.95);
+      }
+      .step-val {
+        font-size: 1.2rem;
+        font-weight: bold;
+        min-width: 32px;
+        text-align: center;
+        font-family: monospace;
+      }
+
+      button.action-btn {
+        padding: 10px 14px;
+        border: none;
+        border-radius: 6px;
+        background: var(--accent);
+        color: #000;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      button.action-btn:hover {
+        background: #ffa64d;
+      }
+      .btn-group {
+        display: flex;
+        gap: 8px;
+      }
+      .btn-group button {
+        flex: 1;
+      }
+      .status-badge {
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: inline-block;
+        margin-left: 10px;
+      }
+      .status-running {
+        background: #10b981;
+        color: #000;
+      }
+      .status-stopped {
+        background: #ef4444;
+        color: #fff;
+      }
+      .pen-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.4);
+        padding: 6px 10px;
+        border-radius: 4px;
+        margin-top: 5px;
+        font-size: 0.85rem;
+        border: 1px solid var(--card-border);
+      }
+      .btn-del {
+        background: #ef4444;
+        color: #fff;
+        border: none;
+        padding: 2px 6px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav-bar">
+      <a href="/">Admin</a>
+      <a href="/scoreboard-simulator.html">Scoreboard Simulator</a>
+      <a href="/serial-analyzer.html">Serial Port Analyzer</a>
+      <a href="/ws-diag.html">WS Diag</a>
+      <a href="/scoreboard-debug.html">Debug JSON</a>
+    </nav>
+
+    <h1>
+      Scoreboard Simulator
+      <span id="clockStatus" class="status-badge status-stopped">STOPPED</span>
+    </h1>
+
+    <div class="row">
+      <div class="col">
+        <h2>Game Clock Control</h2>
+        <div class="preview" id="clockPrev">17:00</div>
+
+        <div class="stepper-control">
+          <label>Minutes (Max 20):</label>
+          <div class="stepper-btns">
+            <button class="btn-step" onclick="adjustClock('min', -1)">−</button>
+            <span class="step-val" id="valClockMin">17</span>
+            <button class="btn-step" onclick="adjustClock('min', 1)">+</button>
+          </div>
+        </div>
+
+        <div class="stepper-control">
+          <label>Seconds:</label>
+          <div class="stepper-btns">
+            <button class="btn-step" onclick="adjustClock('sec', -1)">−</button>
+            <span class="step-val" id="valClockSec">00</span>
+            <button class="btn-step" onclick="adjustClock('sec', 1)">+</button>
+          </div>
+        </div>
+
+        <button class="action-btn" onclick="applyClock()">Apply Time</button>
+
+        <div class="btn-group">
+          <button class="action-btn" onclick="startClock()">Start Clock</button>
+          <button
+            class="action-btn"
+            style="background: #ef4444; color: #fff"
+            onclick="stopClock()"
+          >
+            Stop Clock
+          </button>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2>Score & Period Controls</h2>
+
+        <div class="stepper-control">
+          <label>Home Score:</label>
+          <div class="stepper-btns">
+            <button class="btn-step" onclick="changeVal('homeScore', -1)">
+              −
+            </button>
+            <span class="step-val" id="valHomeScore">0</span>
+            <button class="btn-step" onclick="changeVal('homeScore', 1)">
+              +
+            </button>
+          </div>
+        </div>
+
+        <div class="stepper-control">
+          <label>Away Score:</label>
+          <div class="stepper-btns">
+            <button class="btn-step" onclick="changeVal('awayScore', -1)">
+              −
+            </button>
+            <span class="step-val" id="valAwayScore">0</span>
+            <button class="btn-step" onclick="changeVal('awayScore', 1)">
+              +
+            </button>
+          </div>
+        </div>
+
+        <div class="stepper-control">
+          <label>Period:</label>
+          <div class="stepper-btns">
+            <button class="btn-step" onclick="changeVal('period', -1)">
+              −
+            </button>
+            <span class="step-val" id="valPeriod">1</span>
+            <button class="btn-step" onclick="changeVal('period', 1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2>Shots On Goal</h2>
+
+        <div class="stepper-control">
+          <label>Home Shots:</label>
+          <div class="stepper-btns">
+            <button class="btn-step" onclick="changeVal('homeShots', -1)">
+              −
+            </button>
+            <span class="step-val" id="valHomeShots">0</span>
+            <button class="btn-step" onclick="changeVal('homeShots', 1)">
+              +
+            </button>
+          </div>
+        </div>
+
+        <div class="stepper-control">
+          <label>Away Shots:</label>
+          <div class="stepper-btns">
+            <button class="btn-step" onclick="changeVal('awayShots', -1)">
+              −
+            </button>
+            <span class="step-val" id="valAwayShots">0</span>
+            <button class="btn-step" onclick="changeVal('awayShots', 1)">
+              +
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2>Penalties</h2>
+
+        <div>
+          <p style="font-weight: bold; margin-bottom: 5px">Add Home Penalty</p>
+          Player #: <input id="penHomePlayer" type="number" value="10" /> Min:
+          <input id="penHomeMin" type="number" value="2" />
+          <button class="action-btn" onclick="addPenalty('home')">Add</button>
+          <div id="homePenList" style="margin-top: 8px"></div>
+        </div>
+
+        <hr style="border-color: var(--card-border); margin: 10px 0" />
+
+        <div>
+          <p style="font-weight: bold; margin-bottom: 5px">Add Away Penalty</p>
+          Player #: <input id="penAwayPlayer" type="number" value="8" /> Min:
+          <input id="penAwayMin" type="number" value="2" />
+          <button class="action-btn" onclick="addPenalty('away')">Add</button>
+          <div id="awayPenList" style="margin-top: 8px"></div>
+        </div>
+
+        <button
+          class="action-btn"
+          style="background: #ef4444; color: #fff; margin-top: auto"
+          onclick="sendCmd({ command: 'clearPenalties' })"
+        >
+          Clear All Penalties
+        </button>
+      </div>
+    </div>
+
+    <script>
+      let state = {
+        homeScore: 0,
+        awayScore: 0,
+        period: 1,
+        homeShots: 0,
+        awayShots: 0,
+        clockMin: 17,
+        clockSec: 0,
+        clockTenths: 0,
+        clockRunning: false,
+      };
+
+      let userInteracting = false;
+      let interactionTimeout = null;
+      let lastTickTime = Date.now();
+      let clockDraftDirty = false;
+
+      function sendCmd(payload, cb) {
+        userInteracting = true;
+        clearTimeout(interactionTimeout);
+
+        fetch("/api/cmd", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            console.log("Cmd Response:", data);
+            if (cb) cb();
+            interactionTimeout = setTimeout(() => {
+              userInteracting = false;
+            }, 600);
+          })
+          .catch((err) => {
+            console.error("API Error:", err);
+            userInteracting = false;
+          });
+      }
+
+      function updateUIElements() {
+        document.getElementById("valClockMin").textContent =
+          state.clockMin < 10 ? "0" + state.clockMin : state.clockMin;
+        document.getElementById("valClockSec").textContent =
+          state.clockSec < 10 ? "0" + state.clockSec : state.clockSec;
+
+        let formatted = "";
+        if (state.clockMin > 0) {
+          formatted =
+            (state.clockMin < 10 ? "0" : "") +
+            state.clockMin +
+            ":" +
+            (state.clockSec < 10 ? "0" : "") +
+            state.clockSec;
+        } else {
+          formatted =
+            (state.clockSec < 10 ? "0" : "") +
+            state.clockSec +
+            "." +
+            state.clockTenths;
+        }
+        document.getElementById("clockPrev").textContent = formatted;
+
+        document.getElementById("valHomeScore").textContent = state.homeScore;
+        document.getElementById("valAwayScore").textContent = state.awayScore;
+        document.getElementById("valPeriod").textContent = state.period;
+        document.getElementById("valHomeShots").textContent = state.homeShots;
+        document.getElementById("valAwayShots").textContent = state.awayShots;
+      }
+
+      function adjustClock(type, delta) {
+        // Keep local draft clock values until user explicitly applies or starts.
+        clockDraftDirty = true;
+
+        if (type === "min") {
+          state.clockMin = Math.max(0, Math.min(20, state.clockMin + delta));
+          if (state.clockMin > 0) state.clockTenths = 0;
+        } else if (type === "sec") {
+          state.clockSec = Math.max(0, Math.min(59, state.clockSec + delta));
+        }
+        updateUIElements();
+      }
+
+      function applyClock() {
+        sendCmd({
+          command: "setClock",
+          min: state.clockMin,
+          sec: state.clockSec,
+          tenths: state.clockTenths,
+        }, () => {
+          clockDraftDirty = false;
+          fetchState();
+        });
+      }
+
+      function startClock() {
+        // First push current local time configuration, then start the clock
+        sendCmd(
+          {
+            command: "setClock",
+            min: state.clockMin,
+            sec: state.clockSec,
+            tenths: state.clockTenths,
+          },
+          () => {
+            clockDraftDirty = false;
+            sendCmd({ command: "clockStart" });
+          },
+        );
+      }
+
+      function stopClock() {
+        sendCmd({ command: "clockStop" });
+      }
+
+      function changeVal(key, delta) {
+        userInteracting = true;
+        clearTimeout(interactionTimeout);
+
+        let minVal = key === "period" ? 1 : 0;
+        state[key] = Math.max(minVal, (state[key] || 0) + delta);
+        updateUIElements();
+
+        sendCmd(
+          {
+            command: "setState",
+            homeScore: state.homeScore,
+            awayScore: state.awayScore,
+            period: state.period,
+            homeShots: state.homeShots,
+            awayShots: state.awayShots,
+            shotsHome: state.homeShots,
+            shotsAway: state.awayShots,
+          },
+          () => {
+            interactionTimeout = setTimeout(() => {
+              userInteracting = false;
+            }, 600);
+          },
+        );
+      }
+
+      function addPenalty(team) {
+        let playerEl = document.getElementById(
+          team === "home" ? "penHomePlayer" : "penAwayPlayer",
+        );
+        let minEl = document.getElementById(
+          team === "home" ? "penHomeMin" : "penAwayMin",
+        );
+
+        let pNum = parseInt(playerEl.value) || 0;
+        let pMin = parseInt(minEl.value) || 2;
+
+        sendCmd({
+          command: team === "home" ? "addHomePenalty" : "addAwayPenalty",
+          player: pNum,
+          minutes: pMin,
+          seconds: pMin * 60,
+          team: team,
+        });
+      }
+
+      function deletePenalty(team, index) {
+        sendCmd({
+          command: "deletePenalty",
+          team: team,
+          index: index,
+        });
+      }
+
+      function fetchState() {
+        if (userInteracting) return;
+
+        fetch("/api/state")
+          .then((res) => res.json())
+          .then((data) => {
+            let statusBadge = document.getElementById("clockStatus");
+            if (data.clockRunning) {
+              statusBadge.textContent = "RUNNING";
+              statusBadge.className = "status-badge status-running";
+            } else {
+              statusBadge.textContent = "STOPPED";
+              statusBadge.className = "status-badge status-stopped";
+            }
+
+            state.clockRunning = !!data.clockRunning;
+            if (!clockDraftDirty) {
+              if (data.clockMin !== undefined) state.clockMin = data.clockMin;
+              if (data.clockSec !== undefined) state.clockSec = data.clockSec;
+              if (data.clockTenths !== undefined)
+                state.clockTenths = data.clockTenths;
+            }
+
+            state.homeScore = data.homeScore ?? state.homeScore;
+            state.awayScore = data.awayScore ?? state.awayScore;
+            state.period = data.period ?? state.period;
+            state.homeShots =
+              data.homeShots ?? data.shotsHome ?? state.homeShots;
+            state.awayShots =
+              data.awayShots ?? data.shotsAway ?? state.awayShots;
+
+            updateUIElements();
+
+            renderPenalties("homePenList", "home", [
+              { player: data.homePen1Player, time: data.homePen1Time },
+              { player: data.homePen2Player, time: data.homePen2Time },
+            ]);
+
+            renderPenalties("awayPenList", "away", [
+              { player: data.awayPen1Player, time: data.awayPen1Time },
+              { player: data.awayPen2Player, time: data.awayPen2Time },
+            ]);
+          })
+          .catch((err) => console.error("Error fetching state:", err));
+      }
+
+      setInterval(() => {
+        if (state.clockRunning && state.clockMin === 0 && !userInteracting) {
+          let now = Date.now();
+          if (now - lastTickTime >= 100) {
+            lastTickTime = now;
+            if (state.clockTenths > 0) {
+              state.clockTenths--;
+            } else if (state.clockSec > 0) {
+              state.clockSec--;
+              state.clockTenths = 9;
+            }
+            updateUIElements();
+          }
+        }
+      }, 50);
+
+      function renderPenalties(containerId, team, penalties) {
+        let container = document.getElementById(containerId);
+        container.innerHTML = "";
+
+        let activeCount = 0;
+        penalties.forEach((pen, idx) => {
+          if (pen.player && pen.player > 0) {
+            activeCount++;
+            let div = document.createElement("div");
+            div.className = "pen-item";
+            div.innerHTML = `
+              <span>#${pen.player} &mdash; ${pen.time || "02:00"}</span>
+              <button class="btn-del" onclick="deletePenalty('${team}', ${idx})">✕</button>
+            `;
+            container.appendChild(div);
+          }
+        });
+
+        if (activeCount === 0) {
+          container.innerHTML = `<span style="color:var(--text-muted); font-size:0.85rem">None</span>`;
+        }
+      }
+
+      setInterval(fetchState, 500);
+      fetchState();
+    </script>
+  </body>
+</html>

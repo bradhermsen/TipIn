@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TipIn Scoring Gateway - Admin Portal</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <style>
+      :root {
+        --bg: #0b1424;
+        --card-bg: rgba(20, 26, 51, 0.85);
+        --card-border: #1f274a;
+        --accent: #ff7b00;
+        --accent-hover: #ffa733;
+        --cyan: #38bdf8;
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --danger: #ef4444;
+        --success: #10b981;
+      }
+      [data-theme="light"] {
+        --bg: #f1f5f9;
+        --card-bg: #ffffff;
+        --card-border: #cbd5e1;
+        --text: #0f172a;
+        --text-muted: #64748b;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        padding: 20px;
+        min-height: 100vh;
+      }
+
+      /* Nav Bar */
+      .nav-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        background: var(--card-bg);
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid var(--card-border);
+      }
+      .nav-bar a {
+        color: var(--cyan);
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+      }
+      .nav-bar a:hover,
+      .nav-bar a.active {
+        background: rgba(56, 189, 248, 0.15);
+        color: #fff;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 15px;
+        margin-bottom: 20px;
+        border-bottom: 2px solid var(--accent);
+      }
+      .header-brand {
+        align-items: center;
+        display: flex;
+        gap: 12px;
+      }
+      .header-brand-logo {
+        display: block;
+        height: 44px;
+        width: 44px;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      .brand-tip,
+      .brand-in {
+        font-style: italic;
+        font-weight: 800;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+      }
+      .brand-tip {
+        color: #e8edf5;
+      }
+      .brand-in {
+        color: #ff7b00;
+      }
+      .brand-product {
+        color: #e8edf5;
+        font-style: normal;
+        font-weight: 600;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 20px;
+      }
+      .tile {
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid var(--card-border);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .tile h2 {
+        font-size: 1.1rem;
+        color: var(--accent);
+        border-bottom: 1px solid var(--card-border);
+        padding-bottom: 8px;
+      }
+
+      label {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        font-weight: bold;
+      }
+      input,
+      select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid var(--card-border);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text);
+        font-size: 0.9rem;
+      }
+
+      button {
+        background: var(--accent);
+        color: #000;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 6px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      button:hover {
+        background: var(--accent-hover);
+      }
+      button.btn-danger {
+        background: var(--danger);
+        color: #fff;
+      }
+
+      .scoreboard-box {
+        font-family: "Courier New", monospace;
+        font-size: 2.2rem;
+        text-align: center;
+        padding: 15px;
+        background: #000;
+        border-radius: 8px;
+        color: var(--cyan);
+        letter-spacing: 2px;
+      }
+      pre {
+        background: #000;
+        padding: 12px;
+        border-radius: 6px;
+        max-height: 200px;
+        overflow-y: auto;
+        color: #10b981;
+        font-size: 0.85rem;
+        font-family: monospace;
+      }
+      textarea {
+        width: 100%;
+        min-height: 110px;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid var(--card-border);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text);
+        font-family: monospace;
+        resize: vertical;
+      }
+      .wifi-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .wifi-actions button {
+        flex: 1;
+      }
+      .wifi-networks {
+        display: grid;
+        gap: 6px;
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      .wifi-network {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 10px;
+        align-items: center;
+        padding: 9px 10px;
+        border: 1px solid var(--card-border);
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.16);
+        color: var(--text);
+        text-align: left;
+      }
+      .legal-footer {
+        border-top: 1px solid var(--card-border);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        line-height: 1.55;
+        margin-top: 24px;
+        padding: 18px 12px 4px;
+        text-align: center;
+      }
+      .wifi-network:hover {
+        border-color: var(--cyan);
+        background: rgba(56, 189, 248, 0.12);
+      }
+      .wifi-network-name {
+        overflow-wrap: anywhere;
+      }
+      .wifi-signal {
+        color: var(--cyan);
+        white-space: nowrap;
+      }
+      .wifi-status {
+        min-height: 20px;
+        color: var(--text-muted);
+      }
+      .wifi-status.success {
+        color: var(--success);
+      }
+      .wifi-status.error {
+        color: var(--danger);
+      }
+    </style>
+
+    <script>
+      let ws;
+      let isEmulatorEnabled = false;
+      let wsTokenMasked = "--";
+      let wsTokenRaw = "";
+      let wsTokenVisible = false;
+      let wsAdminToken = "NF-EMU-SECRET-2026";
+
+      function maskTokenLocal(token) {
+        const value = (token || "").trim();
+        if (!value) return "--";
+        if (value.length <= 8) return "********";
+        return `${value.slice(0, 4)}********${value.slice(-4)}`;
+      }
+
+      function isValidIPv4(value) {
+        const text = (value || "").trim();
+        const ipv4Pattern =
+          /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+        return ipv4Pattern.test(text);
+      }
+
+      function wifiSignalLabel(rssi) {
+        if (!rssi) return "Unavailable";
+        if (rssi >= -50) return "Excellent";
+        if (rssi >= -60) return "Good";
+        if (rssi >= -70) return "Fair";
+        if (rssi >= -80) return "Weak";
+        return "Very weak";
+      }
+
+      function wifiSignalBars(rssi) {
+        if (rssi >= -50) return "▂▄▆█";
+        if (rssi >= -60) return "▂▄▆·";
+        if (rssi >= -70) return "▂▄··";
+        if (rssi >= -80) return "▂···";
+        return "····";
+      }
+
+      function setWifiStatus(message, state = "") {
+        const status = document.getElementById("wifiConfigStatus");
+        if (!status) return;
+        status.textContent = message;
+        status.className = `wifi-status ${state}`.trim();
+      }
+
+      function updateWifiSecurityFields() {
+        const security = document.getElementById("wifi_security").value;
+        document.getElementById("personalFields").style.display =
+          security === "personal" ? "block" : "none";
+        document.getElementById("enterpriseFields").style.display =
+          security === "enterprise" ? "block" : "none";
+      }
+
+      function selectWifiNetwork(ssid, security) {
+        document.getElementById("wifi_ssid").value = ssid;
+        document.getElementById("wifi_security").value = security;
+        updateWifiSecurityFields();
+        setWifiStatus(`Selected ${ssid}.`);
+      }
+
+      async function scanWifiNetworks() {
+        const button = document.getElementById("wifiScanButton");
+        const list = document.getElementById("wifiNetworks");
+        button.disabled = true;
+        list.innerHTML = "";
+        setWifiStatus("Scanning 2.4 GHz networks...");
+
+        try {
+          for (let attempt = 0; attempt < 20; attempt += 1) {
+            const response = await fetch("/api/wifi/scan", {
+              credentials: "same-origin",
+            });
+            const result = await response.json();
+            if (response.status === 202 || result.status === "scanning") {
+              await new Promise((resolve) => setTimeout(resolve, 750));
+              continue;
+            }
+            if (!response.ok) throw new Error(result.error || "Scan failed");
+
+            const networks = (result.networks || [])
+              .filter((network) => !network.hidden && network.ssid)
+              .sort((left, right) => right.rssi - left.rssi);
+            if (!networks.length) {
+              setWifiStatus("No visible networks found.", "error");
+              return;
+            }
+            for (const network of networks) {
+              const row = document.createElement("button");
+              row.type = "button";
+              row.className = "wifi-network";
+              row.onclick = () =>
+                selectWifiNetwork(network.ssid, network.security);
+
+              const name = document.createElement("span");
+              name.className = "wifi-network-name";
+              name.textContent = network.ssid;
+              const security = document.createElement("span");
+              security.textContent =
+                network.security === "enterprise"
+                  ? "Enterprise"
+                  : network.security === "open"
+                    ? "Open"
+                    : "Secured";
+              const signal = document.createElement("span");
+              signal.className = "wifi-signal";
+              signal.textContent = `${wifiSignalBars(network.rssi)} ${network.rssi} dBm`;
+              row.append(name, security, signal);
+              list.appendChild(row);
+            }
+            setWifiStatus(
+              `Found ${networks.length} network${networks.length === 1 ? "" : "s"}.`,
+            );
+            return;
+          }
+          throw new Error("Scan timed out");
+        } catch (error) {
+          setWifiStatus(error.message || "Unable to scan networks.", "error");
+        } finally {
+          button.disabled = false;
+        }
+      }
+
+      function renderEmulatorToggleButton() {
+        const button = document.getElementById("emulatorToggleBtn");
+        if (!button) return;
+
+        if (isEmulatorEnabled) {
+          button.innerText = "Disable Emulator";
+          button.classList.add("btn-danger");
+        } else {
+          button.innerText = "Enable Emulator";
+          button.classList.remove("btn-danger");
+        }
+      }
+
+      function renderWsToken() {
+        const tokenSpan = document.getElementById("wsToken");
+        const revealButton = document.getElementById("wsTokenRevealBtn");
+        if (!tokenSpan || !revealButton) return;
+
+        tokenSpan.innerText = wsTokenVisible
+          ? wsTokenRaw || wsTokenMasked || "--"
+          : wsTokenMasked || "--";
+        revealButton.innerText = wsTokenVisible ? "Hide" : "Reveal";
+      }
+
+      function connectWS() {
+        ws = new WebSocket("ws://" + location.host + "/ws");
+
+        ws.onmessage = (msg) => {
+          try {
+            const data = JSON.parse(msg.data);
+            if (data.type === "AUTH_REQUIRED") {
+              ws.send(
+                JSON.stringify({
+                  auth: wsAdminToken,
+                  client: "admin-ui",
+                }),
+              );
+              return;
+            }
+
+            if (data.clockMin !== undefined) {
+              let m = data.clockMin;
+              let s = data.clockSec < 10 ? "0" + data.clockSec : data.clockSec;
+              document.getElementById("sbClock").innerText = `${m}:${s}`;
+            }
+            const home = data.homeScore ?? data.home;
+            const away = data.awayScore ?? data.away;
+            if (home !== undefined && away !== undefined) {
+              document.getElementById("sbScore").innerText =
+                `${home} - ${away}`;
+            }
+            if (data.period !== undefined) {
+              document.getElementById("sbPeriod").innerText =
+                "PERIOD " + data.period;
+            }
+          } catch (e) {}
+        };
+
+        ws.onclose = () => setTimeout(connectWS, 2000);
+      }
+
+      async function refreshWsAuthToken() {
+        try {
+          const res = await fetch("/api/ws-secret", {
+            credentials: "same-origin",
+          });
+          if (!res.ok) return;
+
+          const data = await res.json();
+          wsAdminToken = (data.wsAuthSecret || wsAdminToken).trim();
+          wsTokenMasked =
+            data.wsAuthSecretMasked || maskTokenLocal(wsAdminToken);
+          if (wsTokenVisible) {
+            wsTokenRaw = wsAdminToken;
+          }
+          renderWsToken();
+        } catch (e) {}
+      }
+
+      async function refreshAdmin() {
+        try {
+          const res = await fetch("/api/state", { credentials: "same-origin" });
+          const data = await res.json();
+
+          if (document.getElementById("wifiSSID")) {
+            document.getElementById("wifiSSID").innerText = data.ssid || "--";
+          }
+          document.getElementById("deviceMac").innerText =
+            data.deviceMac || "--";
+          document.getElementById("staConnected").innerText = data.staConnected
+            ? "Connected (" + data.ip + ")"
+            : "Not Connected (" + data.ip + ")";
+          document.getElementById("wifiSignal").innerText = data.staConnected
+            ? `${wifiSignalBars(data.wifiRssi)} ${wifiSignalLabel(data.wifiRssi)} (${data.wifiRssi} dBm)`
+            : "Unavailable";
+          isEmulatorEnabled = Boolean(data.emulator);
+          document.getElementById("emulatorMode").innerText = data.emulator
+            ? "Enabled (Simulated)"
+            : "Disabled (Hardware Feed)";
+          document.getElementById("vendor").innerText = data.vendor;
+          document.getElementById("wsPort").innerText =
+            data.wsPort ?? data.httpPort ?? "80";
+          wsTokenMasked =
+            data.wsAuthSecretMasked || maskTokenLocal(data.wsAuthSecret || "");
+          if (!wsTokenVisible) {
+            wsTokenRaw = "";
+          }
+          renderEmulatorToggleButton();
+          renderWsToken();
+        } catch (e) {}
+      }
+
+      async function toggleWsTokenReveal() {
+        if (wsTokenVisible) {
+          wsTokenVisible = false;
+          renderWsToken();
+          return;
+        }
+
+        if (!wsTokenRaw) {
+          try {
+            const res = await fetch("/api/ws-secret", {
+              credentials: "same-origin",
+            });
+            if (!res.ok) {
+              alert("Unable to retrieve token from device.");
+              return;
+            }
+            const data = await res.json();
+            wsTokenRaw = data.wsAuthSecret || "";
+            wsTokenMasked =
+              data.wsAuthSecretMasked || maskTokenLocal(wsTokenRaw);
+          } catch (e) {
+            alert("Failed to retrieve token.");
+            return;
+          }
+        }
+
+        wsTokenVisible = true;
+        renderWsToken();
+      }
+
+      async function setWsToken() {
+        const input = document.getElementById("newWsToken");
+        const newToken = (input?.value || "").trim();
+
+        if (newToken.length < 8) {
+          alert("WebSocket token must be at least 8 characters.");
+          return;
+        }
+
+        if (!confirm("Rotate WebSocket security token now?")) {
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/cmd", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ command: "setWsToken", wsToken: newToken }),
+          });
+
+          const text = await res.text();
+          let result = {};
+          try {
+            result = JSON.parse(text);
+          } catch (e) {}
+
+          if (!res.ok) {
+            alert(
+              `Error (${res.status}): ${result.message || result.error || text || "Failed to set token."}`,
+            );
+            return;
+          }
+
+          wsAdminToken = newToken;
+          wsTokenRaw = "";
+          wsTokenVisible = false;
+          wsTokenMasked = result.wsAuthSecretMasked || maskTokenLocal(newToken);
+          renderWsToken();
+
+          if (input) input.value = "";
+
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close();
+          }
+
+          await refreshAdmin();
+          alert("WebSocket token updated.");
+        } catch (e) {
+          alert("Failed to rotate WebSocket token.");
+        }
+      }
+
+      async function toggleEmulatorMode() {
+        if (isEmulatorEnabled) {
+          await sendCmd("emuOff");
+        } else {
+          await sendCmd("emuOn");
+        }
+      }
+
+      async function saveWiFi() {
+        const isDhcp = document.getElementById("ip_mode").value === "dhcp";
+        const security = document.getElementById("wifi_security").value;
+        const payload = {
+          ssid: document.getElementById("wifi_ssid").value.trim(),
+          security,
+          pass:
+            security === "open"
+              ? ""
+              : security === "enterprise"
+                ? document.getElementById("wifi_enterprise_pass").value
+                : document.getElementById("wifi_pass").value,
+          identity: document.getElementById("wifi_identity").value.trim(),
+          username: document.getElementById("wifi_username").value.trim(),
+          caCertificate: document.getElementById("wifi_ca").value.trim(),
+          dhcp: isDhcp,
+          ip: document.getElementById("ip_static").value.trim(),
+          gw: document.getElementById("ip_gw").value.trim(),
+          sub: document.getElementById("ip_sn").value.trim(),
+        };
+
+        if (!payload.ssid) {
+          alert("Please enter a Wi-Fi SSID.");
+          return;
+        }
+
+        if (payload.ssid.length > 32) {
+          alert("SSID must be 1-32 characters.");
+          return;
+        }
+
+        if (security === "personal" && payload.pass.length < 8) {
+          alert("Wi-Fi password must be at least 8 characters.");
+          return;
+        }
+
+        if (security === "personal" && payload.pass.length > 63) {
+          alert("Personal Wi-Fi passwords must be 63 characters or less.");
+          return;
+        }
+
+        if (
+          security === "enterprise" &&
+          (!payload.identity || !payload.username || !payload.pass)
+        ) {
+          alert("Enterprise identity, username, and password are required.");
+          return;
+        }
+
+        if (!isDhcp) {
+          if (
+            !isValidIPv4(payload.ip) ||
+            !isValidIPv4(payload.gw) ||
+            !isValidIPv4(payload.sub)
+          ) {
+            alert(
+              "Static IP, Gateway, and Subnet must be valid IPv4 addresses.",
+            );
+            return;
+          }
+        }
+
+        try {
+          document.getElementById("wifiSaveButton").disabled = true;
+          setWifiStatus("Starting connection test...");
+          const res = await fetch("/api/wifi", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+          });
+
+          const text = await res.text();
+          let result = {};
+          try {
+            result = JSON.parse(text);
+          } catch (e) {}
+
+          if (res.ok) {
+            await pollWifiTestStatus();
+          } else {
+            setWifiStatus(
+              result.message ||
+                result.error ||
+                text ||
+                "Unable to test network.",
+              "error",
+            );
+            document.getElementById("wifiSaveButton").disabled = false;
+          }
+        } catch (e) {
+          console.error("Save WiFi Error:", e);
+          setWifiStatus(
+            "Failed to communicate with device: " + e.message,
+            "error",
+          );
+          document.getElementById("wifiSaveButton").disabled = false;
+        }
+      }
+
+      async function pollWifiTestStatus() {
+        for (let attempt = 0; attempt < 35; attempt += 1) {
+          try {
+            const response = await fetch("/api/wifi/status", {
+              credentials: "same-origin",
+            });
+            const result = await response.json();
+            if (result.state === "success") {
+              setWifiStatus(result.message, "success");
+              return;
+            }
+            if (result.state === "failed") {
+              setWifiStatus(result.message, "error");
+              document.getElementById("wifiSaveButton").disabled = false;
+              return;
+            }
+            setWifiStatus(result.message || "Testing connection...");
+          } catch (error) {
+            setWifiStatus("Waiting for the gateway...", "");
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+        setWifiStatus("Connection test status timed out.", "error");
+        document.getElementById("wifiSaveButton").disabled = false;
+      }
+
+      async function changePassword() {
+        const newPass = document.getElementById("newAdminPass").value;
+        if (!newPass) {
+          alert("Please enter a new password.");
+          return;
+        }
+        if (!confirm("Are you sure you want to change the admin password?")) {
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/cmd", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ command: "changePass", newPass: newPass }),
+          });
+
+          const text = await res.text();
+          let result = {};
+          try {
+            result = JSON.parse(text);
+          } catch (e) {}
+
+          if (res.ok) {
+            alert("Admin password updated successfully!");
+            document.getElementById("newAdminPass").value = "";
+          } else {
+            alert(
+              `Error (${res.status}): ${result.error || text || "Failed to change password"}`,
+            );
+          }
+        } catch (e) {
+          console.error("Change Password Error:", e);
+          alert("Failed to communicate with device: " + e.message);
+        }
+      }
+
+      async function sendCmd(command, payload = {}) {
+        try {
+          const res = await fetch("/api/cmd", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ command, ...payload }),
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            alert(`Command '${command}' failed (${res.status}): ${text}`);
+          } else {
+            refreshAdmin();
+          }
+        } catch (e) {
+          console.error("sendCmd Error:", e);
+        }
+      }
+
+      function toggleTheme() {
+        const theme = document.body.getAttribute("data-theme");
+        document.body.setAttribute(
+          "data-theme",
+          theme === "light" ? "dark" : "light",
+        );
+      }
+
+      async function fetchLogs() {
+        try {
+          const res = await fetch("/api/logs", { credentials: "same-origin" });
+          if (res.ok) {
+            const logsText = await res.text();
+            const logsElement = document.getElementById("logs");
+            logsElement.innerText = logsText || "No log messages received yet.";
+            // Auto-scroll to the bottom of the log viewer
+            logsElement.scrollTop = logsElement.scrollHeight;
+          }
+        } catch (e) {
+          console.error("Failed to fetch logs:", e);
+        }
+      }
+
+      // Add fetchLogs() inside window.onload:
+      window.onload = async () => {
+        await refreshAdmin();
+        await refreshWsAuthToken();
+        connectWS();
+        fetchLogs(); // Initial log fetch
+        setInterval(refreshAdmin, 3000);
+        setInterval(fetchLogs, 2000); // Poll logs every 2 seconds
+      };
+    </script>
+  </head>
+
+  <body data-theme="dark">
+    <nav class="nav-bar">
+      <a href="/" class="active">Admin</a>
+      <a href="/scoreboard-simulator.html">Scoreboard Simulator</a>
+      <a href="/serial-analyzer.html">Serial Port Analyzer</a>
+      <a href="/ws-diag.html">WS Diag</a>
+      <a href="/scoreboard-debug.html">Debug JSON</a>
+    </nav>
+
+    <header>
+      <div class="header-brand">
+        <img
+          class="header-brand-logo"
+          src="/tipin-mark.svg"
+          alt=""
+          aria-hidden="true"
+        />
+        <h1>
+          <span class="brand-tip">Tip</span><span class="brand-in">In</span
+          ><span class="brand-product"> Scoring Gateway Admin</span>
+        </h1>
+      </div>
+      <button
+        onclick="toggleTheme()"
+        style="padding: 6px 12px; font-size: 0.8rem"
+      >
+        Theme Switch
+      </button>
+    </header>
+
+    <div class="grid">
+      <div class="tile">
+        <h2>System Status</h2>
+        <p><strong>WiFi SSID:</strong> <span id="wifiSSID">--</span></p>
+        <p><strong>Device MAC:</strong> <span id="deviceMac">--</span></p>
+        <p><strong>WiFi Status:</strong> <span id="staConnected">--</span></p>
+        <p><strong>WiFi Signal:</strong> <span id="wifiSignal">--</span></p>
+        <p><strong>Emulator Mode:</strong> <span id="emulatorMode">--</span></p>
+        <p><strong>Active Vendor:</strong> <span id="vendor">--</span></p>
+        <p><strong>WebSocket TCP Port:</strong> <span id="wsPort">--</span></p>
+        <p>
+          <strong>WebSocket Security Token:</strong>
+          <span id="wsToken">--</span>
+          <button
+            id="wsTokenRevealBtn"
+            style="margin-left: 8px; padding: 3px 8px; font-size: 0.75rem"
+            onclick="toggleWsTokenReveal()"
+          >
+            Reveal
+          </button>
+        </p>
+
+        <div style="margin-top: 10px">
+          <button
+            id="emulatorToggleBtn"
+            style="width: 100%"
+            onclick="toggleEmulatorMode()"
+          >
+            Enable Emulator
+          </button>
+        </div>
+      </div>
+
+      <div class="tile">
+        <h2>Live Scoreboard Preview</h2>
+        <div class="scoreboard-box">
+          <div id="sbClock">--:--</div>
+          <div id="sbScore">0 - 0</div>
+          <div
+            id="sbPeriod"
+            style="font-size: 1rem; margin-top: 5px; color: var(--text-muted)"
+          >
+            PERIOD 1
+          </div>
+        </div>
+      </div>
+
+      <div class="tile">
+        <h2>WiFi Configuration</h2>
+        <div class="wifi-actions">
+          <button
+            id="wifiScanButton"
+            type="button"
+            onclick="scanWifiNetworks()"
+          >
+            Scan Networks
+          </button>
+        </div>
+        <div id="wifiNetworks" class="wifi-networks"></div>
+        <label>SSID</label>
+        <input id="wifi_ssid" placeholder="Network SSID" />
+
+        <label>Security</label>
+        <select id="wifi_security" onchange="updateWifiSecurityFields()">
+          <option value="personal">WPA/WPA2 Personal</option>
+          <option value="enterprise">WPA2 Enterprise (PEAP/MSCHAPv2)</option>
+          <option value="open">Open</option>
+        </select>
+
+        <div id="personalFields">
+          <label>Password</label>
+          <input id="wifi_pass" type="password" placeholder="Password" />
+        </div>
+
+        <div id="enterpriseFields" style="display: none">
+          <label>Identity</label>
+          <input
+            id="wifi_identity"
+            placeholder="user@example.com"
+            maxlength="64"
+          />
+          <label>Username</label>
+          <input id="wifi_username" placeholder="Username" maxlength="64" />
+          <label>Password</label>
+          <input
+            id="wifi_enterprise_pass"
+            type="password"
+            placeholder="Enterprise password"
+            maxlength="64"
+          />
+          <label>CA Certificate (PEM, recommended)</label>
+          <textarea
+            id="wifi_ca"
+            placeholder="-----BEGIN CERTIFICATE-----"
+          ></textarea>
+        </div>
+
+        <label>IP Mode</label>
+        <select
+          id="ip_mode"
+          onchange="
+            document.getElementById('staticFields').style.display =
+              this.value === 'static' ? 'block' : 'none'
+          "
+        >
+          <option value="dhcp">DHCP (Default)</option>
+          <option value="static">Static IP</option>
+        </select>
+
+        <div id="staticFields" style="display: none; margin-top: 10px">
+          <label>Static IP</label>
+          <input id="ip_static" placeholder="192.168.1.150" />
+          <label>Gateway</label>
+          <input id="ip_gw" placeholder="192.168.1.1" />
+          <label>Subnet</label>
+          <input id="ip_sn" placeholder="255.255.255.0" />
+        </div>
+
+        <div id="wifiConfigStatus" class="wifi-status"></div>
+        <button id="wifiSaveButton" type="button" onclick="saveWiFi()">
+          Test &amp; Save WiFi Settings
+        </button>
+      </div>
+
+      <div class="tile">
+        <h2>Hardware Protocol & Mirroring</h2>
+        <label>Vendor Protocol Override</label>
+        <select id="vendorOverride">
+          <option value="auto">Auto Detect</option>
+          <option value="dak">Daktronics</option>
+          <option value="nevco">Nevco</option>
+          <option value="oes">OES</option>
+        </select>
+        <button
+          onclick="sendCmd('vendorSet', { vendor: vendorOverride.value })"
+        >
+          Apply Protocol
+        </button>
+
+        <div style="display: flex; gap: 10px; margin-top: 10px">
+          <button style="flex: 1" onclick="sendCmd('mirrorOn')">
+            Enable Mirroring
+          </button>
+          <button
+            style="flex: 1"
+            class="btn-danger"
+            onclick="sendCmd('mirrorOff')"
+          >
+            Disable Mirroring
+          </button>
+        </div>
+      </div>
+
+      <div class="tile">
+        <h2>System Management</h2>
+        <label>New Admin Password</label>
+        <input
+          id="newAdminPass"
+          type="password"
+          placeholder="Enter new password"
+        />
+        <button onclick="changePassword()">Change Admin Password</button>
+
+        <label>New WebSocket Security Token</label>
+        <input
+          id="newWsToken"
+          type="password"
+          placeholder="Enter new WS token"
+        />
+        <button onclick="setWsToken()">Set WebSocket Token</button>
+
+        <hr
+          style="
+            border: 0;
+            border-top: 1px solid var(--card-border);
+            margin: 4px 0;
+          "
+        />
+
+        <button
+          class="btn-danger"
+          onclick="if (confirm('Reboot device?')) sendCmd('reboot');"
+        >
+          Reboot Gateway
+        </button>
+        <button
+          class="btn-danger"
+          onclick="
+            if (confirm('Factory Reset will erase configuration!'))
+              sendCmd('factory');
+          "
+        >
+          Factory Reset
+        </button>
+        <button
+          style="background: #64748b; color: #fff"
+          onclick="location.href = '/logout'"
+        >
+          Log Out
+        </button>
+      </div>
+    </div>
+
+    <div class="tile" style="margin-top: 20px">
+      <h2>System Console Log</h2>
+      <pre id="logs">Loading logs...</pre>
+    </div>
+
+    <footer class="legal-footer">
+      <p>
+        © 2026 TipIn Scoring. All rights reserved.<br />
+        TipIn Scoring™ is a trademark of Brad Hermsen.
+      </p>
+    </footer>
+  </body>
+</html>
