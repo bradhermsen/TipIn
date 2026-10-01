@@ -93,7 +93,7 @@ namespace TipInAPI.Functions
             var organizations = (await _organizationService.GetAllAsync())
                 .ToDictionary(item => item.OrganizationId);
 
-            var teams = (await _teamsService.GetAllAsync())
+            var teams = (await _teamsService.GetAllAsync(seasonId))
                 .Where(team => !organizationId.HasValue || team.OrganizationId == organizationId.Value)
                 .Where(team => !seasonId.HasValue || team.SeasonId == seasonId.Value)
                 .Where(team => string.IsNullOrWhiteSpace(teamType) || string.Equals(team.TeamType, teamType, StringComparison.OrdinalIgnoreCase))
@@ -136,40 +136,11 @@ namespace TipInAPI.Functions
             var teamId = ParseGuid(query, "teamId");
             var teamType = ParseString(query, "teamType");
 
-            var teams = (await _teamsService.GetAllAsync()).ToArray();
-            var teamMap = teams.ToDictionary(team => team.TeamId, team => team);
-
-            var eligibleTeamIds = new HashSet<Guid>(
-                teams
-                    .Where(team => !organizationId.HasValue || team.OrganizationId == organizationId.Value)
-                    .Where(team => !seasonId.HasValue || team.SeasonId == seasonId.Value)
-                    .Where(team => string.IsNullOrWhiteSpace(teamType) || string.Equals(team.TeamType, teamType, StringComparison.OrdinalIgnoreCase))
-                    .Select(team => team.TeamId));
-
-            var items = (await _gameService.GetAllAsync())
-                .Where(game => !teamId.HasValue || game.HomeTeamId == teamId.Value || game.AwayTeamId == teamId.Value)
-                .Where(game => eligibleTeamIds.Count == 0 || eligibleTeamIds.Contains(game.HomeTeamId) || eligibleTeamIds.Contains(game.AwayTeamId))
-                .OrderByDescending(game => game.GameDateTime)
-                .Select(game =>
-                {
-                    teamMap.TryGetValue(game.HomeTeamId, out var homeTeam);
-                    teamMap.TryGetValue(game.AwayTeamId, out var awayTeam);
-
-                    return new
-                    {
-                        game.GameId,
-                        game.HomeTeamId,
-                        game.HomeTeamName,
-                        game.AwayTeamId,
-                        game.AwayTeamName,
-                        game.GameDateTime,
-                        game.Status,
-                        HomeTeamMascot = homeTeam?.TeamMascot,
-                        AwayTeamMascot = awayTeam?.TeamMascot,
-                        TeamType = homeTeam?.TeamType ?? awayTeam?.TeamType,
-                        LevelName = homeTeam?.LevelName ?? awayTeam?.LevelName,
-                    };
-                });
+            var items = await _gameService.GetGameViewGamesAsync(
+                seasonId,
+                organizationId,
+                teamId,
+                teamType);
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(items);

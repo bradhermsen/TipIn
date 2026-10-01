@@ -73,3 +73,24 @@ jobs:
             --source 'web/game-view/dist' \
             --delete-destination true \
             --auth-mode login
+
+          while IFS= read -r blob; do
+            [ -z "$blob" ] && continue
+            if [[ "$blob" == assets/* ]]; then
+              cache_control='public, max-age=31536000, immutable'
+            else
+              cache_control='no-cache, max-age=0, must-revalidate'
+            fi
+            az storage blob update \
+              --account-name "${STORAGE_ACCOUNT_NAME}" \
+              --container-name '$web' \
+              --name "$blob" \
+              --content-cache-control "$cache_control" \
+              --auth-mode login \
+              --only-show-errors
+          done < <(az storage blob list \
+            --account-name "${STORAGE_ACCOUNT_NAME}" \
+            --container-name '$web' \
+            --auth-mode login \
+            --query '[].name' \
+            --output tsv)

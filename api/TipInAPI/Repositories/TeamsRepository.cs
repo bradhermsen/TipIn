@@ -20,7 +20,7 @@ namespace TipInAPI.Repositories
         // =========================================================
         // GET ALL (List View)
         // =========================================================
-        public async Task<IEnumerable<TeamsListItemDto>> GetAllAsync()
+        public async Task<IEnumerable<TeamsListItemDto>> GetAllAsync(Guid? seasonId = null)
         {
             var sql = @"
                 SELECT 
@@ -67,9 +67,10 @@ namespace TipInAPI.Repositories
                 LEFT JOIN SectionRegions sr ON t.SectionRegionId = sr.Id
                 LEFT JOIN Levels l ON t.LevelId = l.Id
                 LEFT JOIN Seasons s ON t.SeasonId = s.SeasonId
+                WHERE (@SeasonId IS NULL OR t.SeasonId = @SeasonId)
                 ORDER BY t.Name";
 
-            return await _db.QueryAsync<TeamsListItemDto>(sql);
+            return await _db.QueryAsync<TeamsListItemDto>(sql, new { SeasonId = seasonId });
         }
 
         // =========================================================

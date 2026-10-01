@@ -8,6 +8,11 @@ namespace TipInAPI.Repositories
     public interface IGameRepository
     {
         Task<IEnumerable<GameListItemDto>> GetAllAsync();
+        Task<IEnumerable<PublicGameViewGameDto>> GetGameViewGamesAsync(
+            Guid? seasonId,
+            Guid? organizationId,
+            Guid? teamId,
+            string? teamType);
         Task<GameDetailDto?> GetByIdAsync(Guid id);
         Task<string?> GetTeamLevelNameAsync(Guid teamId);
         Task<ManagedVenueSnapshotDto?> GetManagedVenueAsync(Guid arenaId, Guid rinkId);

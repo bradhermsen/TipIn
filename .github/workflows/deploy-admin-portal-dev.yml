@@ -23,6 +23,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check Admin Portal JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          find web/admin-portal -type f -name '*.js' -print0 |
+            while IFS= read -r -d '' script; do
+              node --check "$script"
+            done
+
       - name: Validate deploy settings
         shell: bash
         run: |
@@ -60,3 +74,19 @@ jobs:
             --source 'web/admin-portal' \
             --delete-destination true \
             --auth-mode login
+
+          while IFS= read -r blob; do
+            [ -z "$blob" ] && continue
+            az storage blob update \
+              --account-name "${STORAGE_ACCOUNT_NAME}" \
+              --container-name '$web' \
+              --name "$blob" \
+              --content-cache-control 'public, max-age=300, must-revalidate' \
+              --auth-mode login \
+              --only-show-errors
+          done < <(az storage blob list \
+            --account-name "${STORAGE_ACCOUNT_NAME}" \
+            --container-name '$web' \
+            --auth-mode login \
+            --query '[].name' \
+            --output tsv)

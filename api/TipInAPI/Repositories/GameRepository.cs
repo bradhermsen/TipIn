@@ -85,6 +85,72 @@ namespace TipInAPI.Repositories
             return await _db.QueryAsync<GameListItemDto>(sql);
         }
 
+        public async Task<IEnumerable<PublicGameViewGameDto>> GetGameViewGamesAsync(
+            Guid? seasonId,
+            Guid? organizationId,
+            Guid? teamId,
+            string? teamType)
+        {
+            const string sql = @"
+                SELECT
+                    g.GameId,
+                    g.HomeTeamId,
+                    ht.Name AS HomeTeamName,
+                    g.AwayTeamId,
+                    at.Name AS AwayTeamName,
+                    g.GameDateTime,
+                    g.Status,
+                    ht.TeamMascot AS HomeTeamMascot,
+                    at.TeamMascot AS AwayTeamMascot,
+                    COALESCE(ht.TeamType, at.TeamType) AS TeamType,
+                    COALESCE(hl.Name, al.Name) AS LevelName,
+                    (SELECT COUNT(*) FROM GameGoals gg WHERE gg.GameId = g.GameId AND gg.ScoringTeamId = g.HomeTeamId) AS HomeScore,
+                    (SELECT COUNT(*) FROM GameGoals gg WHERE gg.GameId = g.GameId AND gg.ScoringTeamId = g.AwayTeamId) AS AwayScore
+                FROM Games g
+                LEFT JOIN Teams ht ON ht.Id = g.HomeTeamId
+                LEFT JOIN Teams at ON at.Id = g.AwayTeamId
+                LEFT JOIN Levels hl ON hl.Id = ht.LevelId
+                LEFT JOIN Levels al ON al.Id = at.LevelId
+                WHERE
+                    (@TeamId IS NULL OR g.HomeTeamId = @TeamId OR g.AwayTeamId = @TeamId)
+                    AND (
+                        @SeasonId IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM Teams seasonTeam
+                            WHERE seasonTeam.Id IN (g.HomeTeamId, g.AwayTeamId)
+                                AND seasonTeam.SeasonId = @SeasonId
+                        )
+                    )
+                    AND (
+                        @OrganizationId IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM Teams organizationTeam
+                            WHERE organizationTeam.Id IN (g.HomeTeamId, g.AwayTeamId)
+                                AND organizationTeam.OrganizationId = @OrganizationId
+                        )
+                    )
+                    AND (
+                        @TeamType IS NULL
+                        OR EXISTS (
+                            SELECT 1
+                            FROM Teams typedTeam
+                            WHERE typedTeam.Id IN (g.HomeTeamId, g.AwayTeamId)
+                                AND typedTeam.TeamType = @TeamType
+                        )
+                    )
+                ORDER BY g.GameDateTime DESC;";
+
+            return await _db.QueryAsync<PublicGameViewGameDto>(sql, new
+            {
+                SeasonId = seasonId,
+                OrganizationId = organizationId,
+                TeamId = teamId,
+                TeamType = string.IsNullOrWhiteSpace(teamType) ? null : teamType.Trim(),
+            });
+        }
+
         // =========================================================
         // GET DETAIL
         // =========================================================

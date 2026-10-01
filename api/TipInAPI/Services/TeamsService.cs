@@ -37,8 +37,8 @@ namespace TipInAPI.Services
             _connectionFactory = connectionFactory;
         }
 
-        public Task<IEnumerable<TeamsListItemDto>> GetAllAsync() =>
-            _repo.GetAllAsync();
+        public Task<IEnumerable<TeamsListItemDto>> GetAllAsync(Guid? seasonId = null) =>
+            _repo.GetAllAsync(seasonId);
 
         public Task<TeamDetailDto?> GetByIdAsync(Guid id) =>
             _repo.GetByIdAsync(id);
