@@ -21,8 +21,13 @@ namespace TipInAPI.Services
         private readonly string _jwtSecret;
         private readonly JwtSecurityTokenHandler _tokenHandler = new JwtSecurityTokenHandler();
 
-        public AuthorizationService(string jwtSecret = "your-super-secret-key-at-least-32-characters-long")
+        public AuthorizationService(string jwtSecret)
         {
+            if (string.IsNullOrWhiteSpace(jwtSecret))
+            {
+                throw new ArgumentException("JWT signing key is required.", nameof(jwtSecret));
+            }
+
             _jwtSecret = jwtSecret;
         }
 

@@ -158,6 +158,8 @@ function normalizeGameListItem(row: unknown): ApiGameListItem {
     awayTeamName: pickString(obj, "awayTeamName", "AwayTeamName"),
     gameDateTime: pickString(obj, "gameDateTime", "GameDateTime"),
     status: pickString(obj, "status", "Status") || "SCHEDULED",
+    homeScore: pickOptionalNumber(obj, "homeScore", "HomeScore"),
+    awayScore: pickOptionalNumber(obj, "awayScore", "AwayScore"),
   };
 }
 
@@ -667,16 +669,20 @@ export async function getOrganizations(): Promise<ApiOrganization[]> {
   );
 }
 
-export async function getTeams(): Promise<ApiTeam[]> {
-  const payload = await getJson<unknown>("/public/gameview/teams");
+export async function getTeams(seasonId?: string): Promise<ApiTeam[]> {
+  const query = seasonId ? `?seasonId=${encodeURIComponent(seasonId)}` : "";
+  const payload = await getJson<unknown>(`/public/gameview/teams${query}`);
   return extractListPayload(payload, "teams").map(normalizeTeam);
 }
 
 export async function getTeamsByOrganization(
   organizationId: string,
+  seasonId?: string,
 ): Promise<ApiTeam[]> {
+  const params = new URLSearchParams({ organizationId });
+  if (seasonId) params.set("seasonId", seasonId);
   const payload = await getJson<unknown>(
-    `/public/gameview/teams?organizationId=${encodeURIComponent(organizationId)}`,
+    `/public/gameview/teams?${params.toString()}`,
   );
   return extractListPayload(payload, "teams").map(normalizeTeam);
 }

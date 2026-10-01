@@ -8,7 +8,7 @@ namespace TipInAPI.Services
 {
     public interface ITeamsService
     {
-        Task<IEnumerable<TeamsListItemDto>> GetAllAsync();
+        Task<IEnumerable<TeamsListItemDto>> GetAllAsync(Guid? seasonId = null);
         Task<TeamDetailDto?> GetByIdAsync(Guid id);
         Task<Guid> CreateAsync(TeamCreateUpdateDto dto);
         Task UpdateAsync(Guid id, TeamCreateUpdateDto dto);

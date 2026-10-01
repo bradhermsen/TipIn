@@ -96,6 +96,8 @@ export interface ApiGameListItem {
   awayTeamName: string;
   gameDateTime: string;
   status: string;
+  homeScore?: number;
+  awayScore?: number;
 }
 
 export interface ApiGameDetail {

@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - api/TipInAPI/**
-      - .github/workflows/deploy-TipIn-api-dev.yml
+      - .github/workflows/deploy-netfront-api-dev.yml
   workflow_dispatch:
 
 env:

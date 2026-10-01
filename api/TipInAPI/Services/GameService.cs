@@ -18,6 +18,13 @@ namespace TipInAPI.Services
         public Task<IEnumerable<GameListItemDto>> GetAllAsync()
             => _repo.GetAllAsync();
 
+        public Task<IEnumerable<PublicGameViewGameDto>> GetGameViewGamesAsync(
+            Guid? seasonId,
+            Guid? organizationId,
+            Guid? teamId,
+            string? teamType)
+            => _repo.GetGameViewGamesAsync(seasonId, organizationId, teamId, teamType);
+
         public Task<GameDetailDto?> GetByIdAsync(Guid id)
             => _repo.GetByIdAsync(id);
 

@@ -65,7 +65,12 @@ namespace TipInAPI.Functions
             if (!_authorizationService.HasAnyRole(role, "SuperAdmin", "OrgAdmin", "TeamManager", "Coach", "Viewer"))
                 return await AuthorizationHelper.ForbiddenResponse(req, "Insufficient permissions to view teams");
 
-            var teams = await _service.GetAllAsync();
+            var seasonId = Guid.TryParse(
+                System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("seasonId"),
+                out var parsedSeasonId)
+                ? parsedSeasonId
+                : (Guid?)null;
+            var teams = await _service.GetAllAsync(seasonId);
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(teams);
             return response;

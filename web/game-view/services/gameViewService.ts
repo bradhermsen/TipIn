@@ -1,5 +1,8 @@
 import type {
+  ApiGameListItem,
   ApiGameSummary,
+  ApiOrganization,
+  ApiSeason,
   ApiTeam,
   GameViewFilterData,
   GameViewFilters,
@@ -123,24 +126,50 @@ function pickCurrentSeasonId(seasons: Awaited<ReturnType<typeof getSeasons>>) {
   return sortedByEnd[0]?.seasonId || "";
 }
 
-async function loadScopedTeams(filters: GameViewFilters): Promise<{
-  seasonId: string;
+export interface GameViewSnapshot {
+  organizations: ApiOrganization[];
+  seasons: ApiSeason[];
   teams: ApiTeam[];
-}> {
-  const [seasons, teamsRaw] = await Promise.all([
-    getSeasons(),
-    filters.organizationId
-      ? getTeamsByOrganization(filters.organizationId)
-      : getTeams(),
-  ]);
+  games: ApiGameListItem[];
+  seasonId: string;
+}
 
-  const requestedSeasonId = String(filters.seasonId || "");
-  const seasonId = seasons.some(
-    (season) => String(season.seasonId) === requestedSeasonId,
-  )
+function resolveSeasonId(seasons: ApiSeason[], requestedSeasonId: string) {
+  return seasons.some((season) => String(season.seasonId) === requestedSeasonId)
     ? requestedSeasonId
     : pickCurrentSeasonId(seasons);
+}
 
+export async function fetchGameViewSnapshot(
+  filters: GameViewFilters,
+): Promise<GameViewSnapshot> {
+  const [organizations, seasons] = await Promise.all([
+    getOrganizations(),
+    getSeasons(),
+  ]);
+  const seasonId = resolveSeasonId(seasons, String(filters.seasonId || ""));
+  const [teams, games] = await Promise.all([
+    filters.organizationId
+      ? getTeamsByOrganization(filters.organizationId, seasonId)
+      : getTeams(seasonId),
+    getGames(seasonId),
+  ]);
+
+  return { organizations, seasons, teams, games, seasonId };
+}
+
+async function loadScopedTeams(
+  filters: GameViewFilters,
+  snapshot?: GameViewSnapshot,
+): Promise<{ seasonId: string; teams: ApiTeam[] }> {
+  const seasons = snapshot?.seasons ?? await getSeasons();
+
+  const requestedSeasonId = String(filters.seasonId || "");
+  const seasonId = snapshot?.seasonId ?? resolveSeasonId(seasons, requestedSeasonId);
+
+  const teamsRaw = snapshot?.teams ?? await (filters.organizationId
+    ? getTeamsByOrganization(filters.organizationId, seasonId)
+    : getTeams(seasonId));
   let teams = Array.isArray(teamsRaw) ? teamsRaw : [];
 
   if (seasonId) {
@@ -193,18 +222,18 @@ function buildScorePreviewFromSummary(
 
 export async function fetchFilterData(
   filters?: Partial<GameViewFilters>,
+  snapshot?: GameViewSnapshot,
 ): Promise<GameViewFilterData> {
-  const [organizations, seasons, scoped] = await Promise.all([
-    getOrganizations(),
-    getSeasons(),
-    loadScopedTeams({
+  const [organizations, seasons] = snapshot
+    ? [snapshot.organizations, snapshot.seasons]
+    : await Promise.all([getOrganizations(), getSeasons()]);
+  const scoped = await loadScopedTeams({
       seasonId: filters?.seasonId || "",
       organizationId: filters?.organizationId || "",
       leagueId: filters?.leagueId || "",
       teamLevel: "",
       teamType: filters?.teamType || "",
-    }),
-  ]);
+    }, snapshot);
 
   const seasonOptions = (seasons || [])
     .map((season) => ({
@@ -265,15 +294,16 @@ export async function fetchFilterData(
 
 export async function fetchNextGamesByTeam(
   filters: GameViewFilters,
+  snapshot?: GameViewSnapshot,
 ): Promise<NextGameCardModel[]> {
-  const scoped = await loadScopedTeams(filters);
+  const scoped = await loadScopedTeams(filters, snapshot);
   const teamMap = new Map(
     scoped.teams.map((team) => [String(team.teamId), team]),
   );
   const filteredTeamIds = new Set(
     scoped.teams.map((team) => String(team.teamId)),
   );
-  const games = await getGames(scoped.seasonId);
+  const games = snapshot?.games ?? await getGames(scoped.seasonId);
 
   const gameCandidates = (games || [])
     .filter((game) => {
@@ -354,8 +384,9 @@ export async function fetchNextGamesByTeam(
 
 export async function fetchUpcomingSchedule(
   filters: GameViewFilters,
+  snapshot?: GameViewSnapshot,
 ): Promise<UpcomingScheduleItemModel[]> {
-  const scoped = await loadScopedTeams(filters);
+  const scoped = await loadScopedTeams(filters, snapshot);
   const teamMap = new Map(
     scoped.teams.map((team) => [String(team.teamId), team]),
   );
@@ -363,7 +394,7 @@ export async function fetchUpcomingSchedule(
     scoped.teams.map((team) => String(team.teamId)),
   );
 
-  const games = await getGames(scoped.seasonId);
+  const games = snapshot?.games ?? await getGames(scoped.seasonId);
   return (games || [])
     .filter((game) => {
       const homeId = String(game.homeTeamId || "");
@@ -420,15 +451,16 @@ export async function fetchUpcomingSchedule(
 
 export async function fetchLastFinalGamesByTeam(
   filters: GameViewFilters,
+  snapshot?: GameViewSnapshot,
 ): Promise<LastFinalGameItemModel[]> {
-  const scoped = await loadScopedTeams(filters);
+  const scoped = await loadScopedTeams(filters, snapshot);
   const teamMap = new Map(
     scoped.teams.map((team) => [String(team.teamId), team]),
   );
   const filteredTeamIds = new Set(
     scoped.teams.map((team) => String(team.teamId)),
   );
-  const games = await getGames(scoped.seasonId);
+  const games = snapshot?.games ?? await getGames(scoped.seasonId);
 
   const finalGames = (games || [])
     .filter((game) => {
@@ -458,21 +490,28 @@ export async function fetchLastFinalGamesByTeam(
         teamMap.get(String(game.awayTeamId || ""))?.teamMascot || null,
       );
       let scoreText = "Final score unavailable";
-      try {
-        const summary = await getGameSummaryMobile(String(game.gameId));
-        const score = buildScorePreviewFromSummary(
-          summary,
-          String(game.homeTeamName || "Home"),
-          String(game.awayTeamName || "Away"),
-        );
-        if (
-          typeof score.homeScore === "number" &&
-          typeof score.awayScore === "number"
-        ) {
-          scoreText = `${awayDisplay} ${score.awayScore} - ${score.homeScore} ${homeDisplay}`;
+      if (
+        typeof game.homeScore === "number" &&
+        typeof game.awayScore === "number"
+      ) {
+        scoreText = `${awayDisplay} ${game.awayScore} - ${game.homeScore} ${homeDisplay}`;
+      } else {
+        try {
+          const summary = await getGameSummaryMobile(String(game.gameId));
+          const score = buildScorePreviewFromSummary(
+            summary,
+            String(game.homeTeamName || "Home"),
+            String(game.awayTeamName || "Away"),
+          );
+          if (
+            typeof score.homeScore === "number" &&
+            typeof score.awayScore === "number"
+          ) {
+            scoreText = `${awayDisplay} ${score.awayScore} - ${score.homeScore} ${homeDisplay}`;
+          }
+        } catch {
+          // Keep fallback score text when summary is unavailable.
         }
-      } catch {
-        // Keep fallback score text when summary is unavailable.
       }
 
       return {

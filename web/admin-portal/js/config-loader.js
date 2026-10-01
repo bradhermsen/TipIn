@@ -68,12 +68,13 @@ window.SeasonContext = (function createSeasonContext() {
       activeTeamsPromise = (async () => {
         const season = await getActiveSeason();
         if (!season?.seasonId) return [];
-        const response = await authFetch("/teams", { cache: "no-store" });
+        const response = await authFetch(
+          `/teams?seasonId=${encodeURIComponent(season.seasonId)}`,
+          { cache: "no-store" },
+        );
         if (!response.ok) throw new Error("Failed to load active-season teams");
         const teams = await response.json();
-        return Array.isArray(teams)
-          ? teams.filter((team) => String(team.seasonId || "") === String(season.seasonId))
-          : [];
+        return Array.isArray(teams) ? teams : [];
       })();
     }
     return await activeTeamsPromise;

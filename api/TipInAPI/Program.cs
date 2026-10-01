@@ -1,3 +1,4 @@
+using System;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -76,7 +77,12 @@ var host = new HostBuilder()
         {
             var config = sp.GetRequiredService<IConfiguration>();
             var jwtKey = config["Jwt:Key"];
-            return new AuthorizationService(jwtKey ?? "your-super-secret-key-at-least-32-characters-long");
+            if (string.IsNullOrWhiteSpace(jwtKey))
+            {
+                throw new InvalidOperationException("Jwt:Key must be configured.");
+            }
+
+            return new AuthorizationService(jwtKey);
         });
     })
     .Build();

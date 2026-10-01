@@ -6,6 +6,7 @@ import { LastFinalGamesCard } from "../components/LastFinalGamesCard";
 import { NextGameCard } from "../components/NextGameCard";
 import { UpcomingScheduleCard } from "../components/UpcomingScheduleCard";
 import {
+  fetchGameViewSnapshot,
   fetchFilterData,
   fetchLastFinalGamesByTeam,
   fetchNextGamesByTeam,
@@ -117,12 +118,13 @@ export function GameViewMainScreen() {
       setErrorMessage("");
 
       try {
+        const snapshot = await fetchGameViewSnapshot(filters);
         const scopedFilterData = await fetchFilterData({
           seasonId: filters.seasonId,
           organizationId: filters.organizationId,
           leagueId: filters.leagueId,
           teamType: filters.teamType,
-        });
+        }, snapshot);
 
         if (cancelled) return;
 
@@ -149,9 +151,9 @@ export function GameViewMainScreen() {
         setFilterData(scopedFilterData);
 
         const [cards, schedule, finals] = await Promise.all([
-          fetchNextGamesByTeam(filters),
-          fetchUpcomingSchedule(filters),
-          fetchLastFinalGamesByTeam(filters),
+          fetchNextGamesByTeam(filters, snapshot),
+          fetchUpcomingSchedule(filters, snapshot),
+          fetchLastFinalGamesByTeam(filters, snapshot),
         ]);
 
         if (cancelled) return;
