@@ -419,6 +419,9 @@ void buildClockOnlyJson(JsonDocument &doc) {
 
     doc["clock"] = clockBuf;
     doc["clockFormatted"] = formattedBuf;
+    char lastMinuteBuf[16];
+    snprintf(lastMinuteBuf, sizeof(lastMinuteBuf), "%02d:%02d.%01d", clockMin, clockSec, clockTenths);
+    doc["lastMinuteClock"] = lastMinuteBuf;
     doc["clockRunning"] = clockRunning;
     doc["clockMin"] = clockMin;
     doc["clockSec"] = clockSec;

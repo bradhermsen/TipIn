@@ -4,6 +4,10 @@
 			"name": "TipIn",
 			"path": "."
 		},
+		{
+			"name": "TipIn Gateway",
+			"path": "TipIn Gateway"
+		}
 	],
 	"settings": {
 		"debug.internalConsoleOptions": "neverOpen"

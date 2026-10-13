@@ -794,8 +794,11 @@ Daktronics CG DB-9 (RS-232)           MAX3232                 ESP32 Dev Module
         stale values.
       </li>
       <li>
-        Clock tenths are set to zero because the observed CG hardware feed
-        provides whole seconds only.
+        The observed CG hardware feed provides whole seconds only. In fixed-
+        frame hardware mode, the Gateway estimates display tenths between
+        frames using monotonic elapsed time and re-synchronizes on incoming
+        clock changes. These tenths are interpolated, not measured from the
+        Daktronics feed.
       </li>
       <li>The unknown trailing control/checksum field is not validated.</li>
       <li>
