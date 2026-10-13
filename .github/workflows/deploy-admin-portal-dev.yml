@@ -16,9 +16,10 @@ permissions:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-    name: Deploy Admin Portal to Storage
+    name: Deploy Admin Portal to Static Web Apps
     env:
-      STORAGE_ACCOUNT_NAME: ${{ secrets.AZURE_STORAGE_ACCOUNT_NAME_ADMIN_DEV }}
+      STATIC_WEB_APP_NAME: swa-tipin-admin-dev
+      RESOURCE_GROUP_NAME: DefaultResourceGroup-CUS
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,11 +42,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${STORAGE_ACCOUNT_NAME:-}" ]; then
-            echo "Missing required secret: AZURE_STORAGE_ACCOUNT_NAME_ADMIN_DEV"
+          if [ -z "${STATIC_WEB_APP_NAME:-}" ] || [ -z "${RESOURCE_GROUP_NAME:-}" ]; then
+            echo "Static Web App deploy settings are missing"
             exit 1
           fi
-          echo "Using storage account: ${STORAGE_ACCOUNT_NAME}"
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -54,39 +54,28 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Show Azure context
+      - name: Read Static Web Apps deployment token
         shell: bash
         run: |
           set -euo pipefail
-          az account show --query "{subscription:id, tenant:tenantId, user:user.name}" -o table
-          az storage account show --name "${STORAGE_ACCOUNT_NAME}" --query "{name:name, resourceGroup:resourceGroup, location:primaryLocation}" -o table
-
-      - name: Install Azure CLI storage preview extension
-        run: az extension add --name storage-preview --upgrade
-
-      - name: Sync Admin Portal to Storage static website
-        shell: bash
-        run: |
-          set -euo pipefail
-          az storage blob sync \
-            --account-name "${STORAGE_ACCOUNT_NAME}" \
-            --container '$web' \
-            --source 'web/admin-portal' \
-            --delete-destination true \
-            --auth-mode login
-
-          while IFS= read -r blob; do
-            [ -z "$blob" ] && continue
-            az storage blob update \
-              --account-name "${STORAGE_ACCOUNT_NAME}" \
-              --container-name '$web' \
-              --name "$blob" \
-              --content-cache-control 'public, max-age=300, must-revalidate' \
-              --auth-mode login \
-              --only-show-errors
-          done < <(az storage blob list \
-            --account-name "${STORAGE_ACCOUNT_NAME}" \
-            --container-name '$web' \
-            --auth-mode login \
-            --query '[].name' \
+          token=$(az staticwebapp secrets list \
+            --name "$STATIC_WEB_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP_NAME" \
+            --query properties.apiKey \
             --output tsv)
+          if [ -z "$token" ]; then
+            echo "Static Web Apps deployment token was not returned"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "SWA_API_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Deploy Admin Portal
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_API_TOKEN }}
+          action: upload
+          app_location: web/admin-portal
+          api_location: ""
+          output_location: ""
+          skip_app_build: true
