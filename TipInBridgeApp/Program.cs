@@ -67,6 +67,7 @@ namespace TipInBridgeApp
         private readonly AppSettings settings;
         private readonly string jsonOutputPath;
         private bool isConnected = false;
+        private bool pollInProgress;
 
         public TrayApplicationContext()
         {
@@ -101,15 +102,19 @@ namespace TipInBridgeApp
 
         private async Task PollScoreboardState()
         {
+            if (pollInProgress)
+                return;
+
+            pollInProgress = true;
             try
             {
                 string endpoint = "/api/state/clock";
 
-                HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"{GetBaseUrl()}{endpoint}");
+                using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"{GetBaseUrl()}{endpoint}");
                 if (!string.IsNullOrEmpty(settings.AuthSecret))
                     request.Headers.Add("Authorization", $"Bearer {settings.AuthSecret}");
 
-                HttpResponseMessage response = await client.SendAsync(request);
+                using HttpResponseMessage response = await client.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
                 {
                     isConnected = false;
@@ -124,35 +129,10 @@ namespace TipInBridgeApp
 
                 int min = raw["clockMin"]?.Value<int>() ?? 0;
                 int sec = raw["clockSec"]?.Value<int>() ?? 0;
+                int tenths = raw["clockTenths"]?.Value<int>() ?? 0;
 
-                // Determine correct clock format
-                string formattedClock;
-
-                if (min > 0)
-                {
-                    // Standard hockey clock: M:SS
-                    formattedClock = $"{min}:{sec:D2}";
-                }
-                else
-                {
-                    // Final minute: SS.T from lastMinuteClock
-                    string lm = raw["lastMinuteClock"]?.Value<string>() ?? "0:00.0";
-
-                    // Remove ALL leading zeros before the colon
-                    // "00:33.2" → "33.2"
-                    // "0:33.2" → "33.2"
-                    // "000:33.2" → "33.2"
-                    var parts = lm.Split(':');
-                    string mm = parts[0];
-                    string rest = parts[1];
-
-                    mm = mm.TrimStart('0'); // remove all leading zeros
-
-                    if (mm == "")
-                        formattedClock = rest; // "33.2"
-                    else
-                        formattedClock = mm + ":" + rest;
-                }
+                string formattedClock = raw["clockFormatted"]?.Value<string>() ??
+                    (min > 0 ? $"{min}:{sec:D2}" : $"{sec:D2}.{tenths}");
 
                 // Helper to convert "0", "00:00" to null and remove leading zeros from mm:ss
                 JToken NormalizePenalty(JToken? token)
@@ -222,6 +202,10 @@ namespace TipInBridgeApp
                 isConnected = false;
                 trayMenu.Items[0].Text = "Status: Disconnected";
                 trayIcon.Text = "TipIn: Disconnected";
+            }
+            finally
+            {
+                pollInProgress = false;
             }
         }
 

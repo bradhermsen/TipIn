@@ -30,6 +30,11 @@ int currentPeriod = 1;
 static bool serialMirroringEnabled = false;
 static unsigned long lastClockTick = 0;
 static String dakLineBuffer = "";
+static bool fixedFrameClockTiming = false;
+static bool fixedFrameClockAnchorValid = false;
+static int fixedFrameClockAnchorSeconds = 0;
+static uint32_t fixedFrameClockAnchorMillis = 0;
+static bool fixedFrameClockAnchorRunning = false;
 constexpr size_t SERIAL_TRACE_CAPACITY = 1600;
 constexpr size_t DAK_FRAME_CAPACITY = 240;
 static char serialTraceBuffer[SERIAL_TRACE_CAPACITY];
@@ -255,10 +260,34 @@ static bool parseDaktronicsCgFrame(const char* frame, size_t frameLength) {
     if (currentVendor != VENDOR_DAKTRONICS) return false;
 
     if (frameLength >= 19 && frame[2] == ':') {
-        clockMin = clampInt(parseFixedInt(frame, 0, 2, clockMin), 0, 99);
-        clockSec = clampInt(parseFixedInt(frame, 3, 2, clockSec), 0, 59);
+        const int frameMin = clampInt(parseFixedInt(frame, 0, 2, clockMin), 0, 99);
+        const int frameSec = clampInt(parseFixedInt(frame, 3, 2, clockSec), 0, 59);
+        const bool frameRunning = frame[7] != 's' && frame[7] != 'S';
+        const int frameTotalSeconds = (frameMin * 60) + frameSec;
+        const uint32_t now = millis();
+
+        if (!fixedFrameClockAnchorValid || frameRunning != fixedFrameClockAnchorRunning) {
+            fixedFrameClockAnchorValid = true;
+            fixedFrameClockAnchorSeconds = frameTotalSeconds;
+            fixedFrameClockAnchorMillis = now;
+            fixedFrameClockAnchorRunning = frameRunning;
+        } else if (frameRunning) {
+            const uint32_t elapsedSeconds = (now - fixedFrameClockAnchorMillis) / 1000;
+            const int expectedSeconds = max(0, fixedFrameClockAnchorSeconds - static_cast<int>(elapsedSeconds));
+            if (frameTotalSeconds != expectedSeconds) {
+                fixedFrameClockAnchorSeconds = frameTotalSeconds;
+                fixedFrameClockAnchorMillis = now;
+            }
+        } else if (frameTotalSeconds != fixedFrameClockAnchorSeconds) {
+            fixedFrameClockAnchorSeconds = frameTotalSeconds;
+            fixedFrameClockAnchorMillis = now;
+        }
+
+        fixedFrameClockTiming = true;
+        clockMin = frameMin;
+        clockSec = frameSec;
         clockTenths = 0;
-        clockRunning = frame[7] != 's' && frame[7] != 'S';
+        clockRunning = frameRunning;
         homeScore = clampInt(parseFixedInt(frame, 8, 2, homeScore), 0, 199);
         awayScore = clampInt(parseFixedInt(frame, 10, 2, awayScore), 0, 199);
         homeShots = clampInt(parseFixedInt(frame, 13, 3, homeShots), 0, 199);
@@ -294,6 +323,8 @@ static bool parseDaktronicsCgFrame(const char* frame, size_t frameLength) {
     // Fallback for whitespace-delimited test feeds.
     if (fieldCount != 8 || fields[0].indexOf(':') <= 0) return false;
 
+    fixedFrameClockTiming = false;
+    fixedFrameClockAnchorValid = false;
     parseClockField(fields[0]);
 
     String clockStatus = fields[1];
@@ -367,6 +398,8 @@ static void processIncomingSerialByte(uint8_t byteIn) {
     // Line-oriented parser scaffold for Daktronics serial adapters.
     if (byteIn == '\r' || byteIn == '\n') {
         if (dakLineBuffer.length() > 0) {
+            fixedFrameClockTiming = false;
+            fixedFrameClockAnchorValid = false;
             parseDaktronicsLine(dakLineBuffer);
             dakLineBuffer = "";
         }
@@ -447,6 +480,16 @@ void scoreboard_loop() {
                 }
             }
         }
+    } else if (fixedFrameClockTiming && fixedFrameClockAnchorValid) {
+        const int64_t anchorTenths = static_cast<int64_t>(fixedFrameClockAnchorSeconds) * 10;
+        const uint32_t elapsedTenths = fixedFrameClockAnchorRunning
+            ? (millis() - fixedFrameClockAnchorMillis) / 100
+            : 0;
+        const int64_t remainingTenths = max<int64_t>(0, anchorTenths - elapsedTenths);
+
+        clockMin = static_cast<int>(remainingTenths / 600);
+        clockSec = static_cast<int>((remainingTenths / 10) % 60);
+        clockTenths = static_cast<int>(remainingTenths % 10);
     }
 }
 

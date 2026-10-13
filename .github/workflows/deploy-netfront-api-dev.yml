@@ -13,7 +13,7 @@ env:
   DOTNET_VERSION: 8.0.x
   PROJECT_PATH: api/TipInAPI/TipInAPI.csproj
   PUBLISH_DIR: api/TipInAPI/publish
-  FUNCTIONAPP_NAME: TipIn-api-dev
+  FUNCTIONAPP_NAME: netfront-api-dev
 
 permissions:
   id-token: write
