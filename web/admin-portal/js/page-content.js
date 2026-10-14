@@ -1645,12 +1645,12 @@ window.PageContentRegistry.schedules = () => `
       <table class="schedule-import-table">
         <thead>
           <tr>
-            <th>Date</th><th>Time</th><th>Winona Team</th><th>Opponent</th>
-            <th>Home/Away</th><th>Game Type</th><th>Venue</th><th>Preview Status</th>
+            <th>Date</th><th>Time</th><th>Team Name</th><th>Level</th><th>Team Type</th>
+            <th>Opponent</th><th>Home/Away</th><th>Game Type</th><th>Venue</th><th>Preview Status</th>
           </tr>
         </thead>
         <tbody id="scheduleImportRows">
-          <tr><td colspan="8">Choose a CSV file to preview its schedule rows.</td></tr>
+          <tr><td colspan="10">Choose a CSV file to preview its schedule rows.</td></tr>
         </tbody>
       </table>
     </div>
