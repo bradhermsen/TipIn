@@ -386,19 +386,40 @@ function renderLeagueLinkedCatalog(catalog, items, label) {
     list.innerHTML = `<div class="settings-helper-text">No ${label.toLowerCase()} options configured.</div>`;
     return;
   }
+
   const deleteAttribute = catalog === "conferences" ? "data-delete-conference" : "data-delete-section";
-  list.innerHTML = items.map((item) => {
-    const teamCount = Number(item.teamCount || 0);
-    return `
-      <div class="settings-media-row">
-        <div class="settings-media-meta">
-          <span class="settings-media-name">${escapeHtml(item.name)}</span>
-          <span class="settings-helper-text">${escapeHtml(item.leagueName || "No League")} · ${teamCount} team${teamCount === 1 ? "" : "s"}</span>
-        </div>
-        <button class="nf-btn nf-btn-danger" type="button" ${deleteAttribute}="${escapeHtml(item.id)}" ${teamCount ? "disabled title=\"Reassign teams before removing this option\"" : ""}>Remove</button>
-      </div>
-    `;
-  }).join("");
+  const groups = new Map();
+  items.forEach((item) => {
+    const groupKey = String(item.leagueId || item.leagueName || "unassigned");
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        name: item.leagueName || "Unassigned League",
+        items: [],
+      });
+    }
+    groups.get(groupKey).items.push(item);
+  });
+
+  list.innerHTML = [...groups.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((group) => `
+      <section class="settings-catalog-group">
+        <h2 class="settings-catalog-group-title">${escapeHtml(group.name)}</h2>
+        ${group.items.map((item) => {
+          const teamCount = Number(item.teamCount || 0);
+          return `
+            <div class="settings-media-row">
+              <div class="settings-media-meta">
+                <span class="settings-media-name">${escapeHtml(item.name)}</span>
+                <span class="settings-helper-text">${teamCount} team${teamCount === 1 ? "" : "s"}</span>
+              </div>
+              <button class="nf-btn nf-btn-danger" type="button" ${deleteAttribute}="${escapeHtml(item.id)}" ${teamCount ? "disabled title=\"Reassign teams before removing this option\"" : ""}>Remove</button>
+            </div>
+          `;
+        }).join("")}
+      </section>
+    `).join("");
+
   list.querySelectorAll(`[${deleteAttribute}]`).forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.getAttribute(deleteAttribute);
