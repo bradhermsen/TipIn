@@ -81,7 +81,6 @@ window.PageContentRegistry.teams = () => `
     <div id="teamsGroupedList" class="nf-grouped-list"></div>
   </div>
 `;
-
 //=================================================================
 // TEAMS MODALS (MATCH USERS MODAL STYLING)
 //=================================================================
@@ -106,6 +105,33 @@ window.PageContentRegistry.teamsModals = () => `
           <div class="two-col">
             <div>
               <label>Team Name</label>
+
+          <section id="scheduleImportPreview" class="nf-card schedule-import-preview hidden" aria-labelledby="scheduleImportPreviewTitle">
+            <div class="schedule-import-preview-header">
+              <div>
+                <h2 id="scheduleImportPreviewTitle">GoBound Schedule Preview</h2>
+                <p>Preview only. No Organizations, Teams, or Games will be created.</p>
+              </div>
+              <button id="closeScheduleImportPreview" class="nf-btn nf-btn-secondary" type="button">Close</button>
+            </div>
+            <label class="schedule-import-file-label" for="scheduleImportCsvFile">GoBound CSV file</label>
+            <input id="scheduleImportCsvFile" class="nf-input" type="file" accept=".csv,text/csv" />
+            <div id="scheduleImportSummary" class="schedule-import-summary" aria-live="polite"></div>
+            <div id="scheduleImportMessages" class="schedule-import-messages"></div>
+            <div class="schedule-import-table-wrap">
+              <table class="schedule-import-table">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Time</th><th>Winona Team</th><th>Opponent</th>
+                    <th>Home/Away</th><th>Game Type</th><th>Venue</th><th>Preview Status</th>
+                  </tr>
+                </thead>
+                <tbody id="scheduleImportRows">
+                  <tr><td colspan="8">Choose a CSV file to preview its schedule rows.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
               <input id="team-name" type="text" class="nf-input" />
             </div>
 
@@ -1593,12 +1619,42 @@ window.PageContentRegistry.schedules = () => `
       </div>
 
       <div class="page-header-actions">
+        <button id="btnPreviewGoBoundSchedule" class="nf-btn nf-btn-secondary" type="button">
+          Preview GoBound CSV
+        </button>
         <button id="btnAddGame" class="nf-btn nf-btn-primary">
           <i class="fa fa-plus"></i> Add Game
         </button>
       </div>
     </div>
   </div>
+
+  <section id="scheduleImportPreview" class="nf-card schedule-import-preview hidden" aria-labelledby="scheduleImportPreviewTitle">
+    <div class="schedule-import-preview-header">
+      <div>
+        <h2 id="scheduleImportPreviewTitle">GoBound Schedule Preview</h2>
+        <p>Preview only. No Organizations, Teams, or Games will be created.</p>
+      </div>
+      <button id="closeScheduleImportPreview" class="nf-btn nf-btn-secondary" type="button">Close</button>
+    </div>
+    <label class="schedule-import-file-label" for="scheduleImportCsvFile">GoBound CSV file</label>
+    <input id="scheduleImportCsvFile" class="nf-input" type="file" accept=".csv,text/csv" />
+    <div id="scheduleImportSummary" class="schedule-import-summary" aria-live="polite"></div>
+    <div id="scheduleImportMessages" class="schedule-import-messages"></div>
+    <div class="schedule-import-table-wrap">
+      <table class="schedule-import-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Time</th><th>Winona Team</th><th>Opponent</th>
+            <th>Home/Away</th><th>Game Type</th><th>Venue</th><th>Preview Status</th>
+          </tr>
+        </thead>
+        <tbody id="scheduleImportRows">
+          <tr><td colspan="8">Choose a CSV file to preview its schedule rows.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
   <!-- GAME SCHEDULES FILTER BAR COMPONENT -->
   <div class="nf-card">
