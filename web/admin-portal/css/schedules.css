@@ -1,3 +1,187 @@
+.schedule-import-preview {
+  margin-bottom: 16px;
+}
+
+.schedule-import-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.schedule-import-preview-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.schedule-import-preview-header p {
+  margin: 6px 0 0;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-import-file-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schedule-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 12px 0;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-import-messages {
+  margin: 8px 0;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-import-table-wrap {
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--nf-border-light);
+  border-radius: 6px;
+}
+
+.schedule-import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.schedule-import-table th,
+.schedule-import-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--nf-border-light);
+  text-align: left;
+  vertical-align: top;
+}
+
+.schedule-import-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--nf-surface, #101827);
+  color: var(--nf-text);
+}
+
+.schedule-import-status-ready {
+  color: #42b96b;
+}
+
+.schedule-import-status-review {
+  color: #d89d36;
+}
+
+@media (max-width: 760px) {
+  .schedule-import-preview-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-import-table {
+    min-width: 850px;
+  }
+}
+.schedule-import-preview {
+  margin-bottom: 16px;
+}
+
+.schedule-import-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.schedule-import-preview-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.schedule-import-preview-header p {
+  margin: 6px 0 0;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-import-file-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schedule-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 12px 0;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-import-messages {
+  margin: 8px 0;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-import-table-wrap {
+  max-height: 480px;
+  overflow: auto;
+  border: 1px solid var(--nf-border-light);
+  border-radius: 6px;
+}
+
+.schedule-import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.schedule-import-table th,
+.schedule-import-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--nf-border-light);
+  text-align: left;
+  vertical-align: top;
+}
+
+.schedule-import-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--nf-surface, #101827);
+  color: var(--nf-text);
+}
+
+.schedule-import-status-ready {
+  color: #42b96b;
+}
+
+.schedule-import-status-review {
+  color: #d89d36;
+}
+
+@media (max-width: 760px) {
+  .schedule-import-preview-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .schedule-import-table {
+    min-width: 850px;
+  }
+}
 /* Schedules Page — Page-specific only */
 
 #game-managed-venue-fields.hidden,
