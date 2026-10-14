@@ -14,7 +14,7 @@ const FacilityApi = {
     return this.request(`/organizations/${organizationId}/arenas`);
   },
   getCatalog() {
-    return this.request("/arenas/catalog");
+    return this.request("/arenas/catalog", { cache: "no-store" });
   },
   createArena(organizationId, dto) {
     return this.request(`/organizations/${organizationId}/arenas`, {
