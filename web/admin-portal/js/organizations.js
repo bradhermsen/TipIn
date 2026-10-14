@@ -4,6 +4,9 @@
 
 const ORG_GROUP_PAGE_SIZE = 10;
 const orgGroupPaginationState = {};
+let organizationDuplicateCheckTimer = null;
+let organizationDuplicateRequestId = 0;
+let organizationDuplicateCandidates = [];
 const orgFacilityEscape = (value) =>
   String(value ?? "").replace(
     /[&<>'"]/g,
@@ -71,6 +74,125 @@ function getFilteredOrganizations() {
 
 function applyOrgFiltersAndSearch() {
   renderOrganizationsGrouped(getFilteredOrganizations());
+}
+
+function wireOrganizationDuplicateCheck() {
+  const nameInput = document.getElementById("org-name");
+  const leagueSelect = document.getElementById("org-league");
+  if (!nameInput || !leagueSelect) return;
+
+  nameInput.addEventListener("input", scheduleOrganizationDuplicateCheck);
+  leagueSelect.addEventListener("change", scheduleOrganizationDuplicateCheck);
+}
+
+function clearOrganizationDuplicateCheck() {
+  organizationDuplicateCandidates = [];
+  const container = document.getElementById("org-duplicate-check");
+  if (!container) return;
+  container.hidden = true;
+  container.replaceChildren();
+}
+
+function scheduleOrganizationDuplicateCheck() {
+  clearTimeout(organizationDuplicateCheckTimer);
+  organizationDuplicateRequestId++;
+  clearOrganizationDuplicateCheck();
+  organizationDuplicateCheckTimer = setTimeout(checkSimilarOrganizations, 350);
+}
+
+async function checkSimilarOrganizations() {
+  const requestId = ++organizationDuplicateRequestId;
+  const name = document.getElementById("org-name")?.value?.trim() || "";
+  const leagueId = document.getElementById("org-league")?.value || "";
+  const container = document.getElementById("org-duplicate-check");
+
+  if (!container || AdminPage.editingId || name.length < 3 || !leagueId) {
+    clearOrganizationDuplicateCheck();
+    return;
+  }
+
+  container.hidden = false;
+  container.textContent = "Checking for similar organizations...";
+
+  try {
+    const matches = await OrgApi.findSimilar(name, leagueId);
+    if (requestId !== organizationDuplicateRequestId) return;
+    organizationDuplicateCandidates = Array.isArray(matches) ? matches : [];
+    renderOrganizationDuplicateCandidates();
+  } catch (error) {
+    if (requestId !== organizationDuplicateRequestId) return;
+    organizationDuplicateCandidates = [];
+    container.hidden = false;
+    container.textContent = "Unable to check similar organizations. Exact duplicates will still be blocked when saving.";
+    console.warn("Organization similarity check failed:", error);
+  }
+}
+
+function renderOrganizationDuplicateCandidates() {
+  const container = document.getElementById("org-duplicate-check");
+  if (!container) return;
+  container.replaceChildren();
+  if (!organizationDuplicateCandidates.length) {
+    container.hidden = true;
+    return;
+  }
+
+  container.hidden = false;
+  const heading = document.createElement("div");
+  heading.className = "org-duplicate-heading";
+  heading.textContent = "Possible existing organizations in this League";
+  container.appendChild(heading);
+
+  organizationDuplicateCandidates.forEach((organization) => {
+    const row = document.createElement("div");
+    row.className = "org-duplicate-row";
+
+    const details = document.createElement("div");
+    details.className = "org-duplicate-details";
+    const name = document.createElement("strong");
+    name.textContent = organization.name || "Unnamed organization";
+    const location = [organization.city, organization.state].filter(Boolean).join(", ");
+    const metadata = document.createElement("span");
+    metadata.textContent = [location, `${organization.similarityScore}% match`]
+      .filter(Boolean)
+      .join(" · ");
+    details.append(name, metadata);
+
+    const openButton = document.createElement("button");
+    openButton.className = "nf-btn nf-btn-secondary";
+    openButton.type = "button";
+    openButton.textContent = "Open existing";
+    openButton.addEventListener("click", () => openEditOrganization(organization.organizationId));
+
+    row.append(details, openButton);
+    container.appendChild(row);
+  });
+
+  const note = document.createElement("div");
+  note.className = "org-duplicate-note";
+  note.textContent = "If this is the same organization, use Seasons > Manage Participation to add it to the current season.";
+  container.appendChild(note);
+}
+
+async function confirmOrganizationNameMatches(payload) {
+  let matches = organizationDuplicateCandidates;
+  try {
+    matches = await OrgApi.findSimilar(payload.name.trim(), payload.leagueId);
+  } catch (error) {
+    console.warn("Final organization duplicate check failed:", error);
+  }
+
+  const exactMatch = matches.find((candidate) => candidate.similarityScore >= 100);
+  if (exactMatch) {
+    const message = `An organization with this name already exists in this league. Open it or use Seasons > Manage Participation. Existing ID: ${exactMatch.organizationId}`;
+    if (typeof window.showMessage === "function") window.showMessage(message, "error");
+    else alert(message);
+    return false;
+  }
+
+  if (!matches.length) return true;
+  const examples = matches.slice(0, 3).map((candidate) => candidate.name).join(", ");
+  return window.confirm(`Possible matching organizations were found: ${examples}. Create a separate organization anyway?`);
 }
 
 function renderOrganizationsGrouped(orgs) {
@@ -257,7 +379,21 @@ AdminPage.init({
     if (AdminPage.editingId) {
       await OrgApi.update(AdminPage.editingId, payload);
     } else {
-      await OrgApi.create(payload);
+      if (!(await confirmOrganizationNameMatches(payload))) return;
+      try {
+        await OrgApi.create(payload);
+      } catch (error) {
+        if (error.existingOrganizationId) {
+          const message = `${error.message} Existing Organization ID: ${error.existingOrganizationId}. Use Seasons > Manage Participation to add it to the current season.`;
+          if (typeof window.showMessage === "function") {
+            window.showMessage(message, "error");
+          } else {
+            alert(message);
+          }
+          return;
+        }
+        throw error;
+      }
     }
 
     window.editingOrganizationType = null;
@@ -277,6 +413,7 @@ AdminPage.init({
   loadDropdowns: async () => {
     await loadLeagues();
     wireOrgFilterEvents();
+    wireOrganizationDuplicateCheck();
   },
 
   // -------------------------------------------------------
@@ -470,6 +607,7 @@ function wireOrgFilterEvents() {
 function openAddOrganization() {
   AdminPage.editingId = null;
   window.editingOrganizationType = null;
+  clearOrganizationDuplicateCheck();
   AdminPage.config.clearForm();
   document.getElementById("orgModalTitle").textContent = "Add Organization";
   document.getElementById("org-facilities-section")?.classList.add("hidden");
@@ -486,6 +624,7 @@ function openAddOrganization() {
 // =========================================================
 async function openEditOrganization(id) {
   try {
+    clearOrganizationDuplicateCheck();
     const org = await OrgApi.getById(id);
     AdminPage.editingId = id;
     AdminPage.config.populateForm(org);

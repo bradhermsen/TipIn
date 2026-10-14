@@ -26,6 +26,9 @@ namespace TipInAPI.Services
         public Task<OrganizationDto?> GetByIdAsync(Guid id)
             => _repo.GetByIdAsync(id);
 
+        public Task<Guid?> FindDuplicateIdAsync(string name, Guid leagueId)
+            => _repo.FindDuplicateIdAsync(name, leagueId);
+
         // ⭐ Returns full Organization
         public async Task<Organization> CreateAsync(CreateOrganizationDto dto)
         {

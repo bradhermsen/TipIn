@@ -10,6 +10,7 @@ namespace TipInAPI.Services
     {
         Task<IEnumerable<OrganizationListItemDto>> GetAllAsync();
         Task<OrganizationDto?> GetByIdAsync(Guid id);
+        Task<Guid?> FindDuplicateIdAsync(string name, Guid leagueId);
 
         // Updated: now returns full Organization
         Task<Organization> CreateAsync(CreateOrganizationDto dto);

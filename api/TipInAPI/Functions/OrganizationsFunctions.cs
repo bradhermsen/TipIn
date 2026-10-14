@@ -2,9 +2,13 @@ using System;
 using System.Net;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Data.SqlClient;
 using TipInAPI.DTOs;
+using TipInAPI.Models;
 using TipInAPI.Services;
 using TipInAPI.Infrastructure.Authorization;
 
@@ -90,6 +94,62 @@ namespace TipInAPI.Functions
             return result;
         }
 
+        [Function("FindSimilarOrganizations")]
+        public async Task<HttpResponseData> FindSimilarOrganizations(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "organizations/similar")] HttpRequestData req)
+        {
+            var token = AuthorizationHelper.ExtractBearerToken(req);
+            if (string.IsNullOrEmpty(token))
+                return await AuthorizationHelper.UnauthorizedResponse(req, "No authorization token provided");
+
+            var (isValid, _, role) = _authorizationService.ValidateToken(token);
+            if (!isValid)
+                return await AuthorizationHelper.UnauthorizedResponse(req, "Invalid or expired token");
+            if (role != "SuperAdmin")
+                return await AuthorizationHelper.ForbiddenResponse(req, "Only SuperAdmin can check Organization duplicates");
+
+            var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+            var name = query["name"]?.Trim() ?? string.Empty;
+            if (!Guid.TryParse(query["leagueId"], out var leagueId) || name.Length < 3)
+            {
+                var badRequest = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badRequest.WriteStringAsync("A League and at least three name characters are required.");
+                return badRequest;
+            }
+
+            var normalizedName = NormalizeOrganizationName(name);
+            var organizations = await _service.GetAllAsync();
+            var matches = organizations
+                .Where(org => org.LeagueId == leagueId && !string.IsNullOrWhiteSpace(org.Name))
+                .Select(org => new
+                {
+                    organization = org,
+                    normalized = NormalizeOrganizationName(org.Name!)
+                })
+                .Select(candidate => new
+                {
+                    candidate.organization,
+                    score = SimilarityScore(normalizedName, candidate.normalized)
+                })
+                .Where(candidate => candidate.score >= 0.72)
+                .OrderByDescending(candidate => candidate.score)
+                .ThenBy(candidate => candidate.organization.Name)
+                .Take(5)
+                .Select(candidate => new
+                {
+                    organizationId = candidate.organization.OrganizationId,
+                    name = candidate.organization.Name,
+                    city = candidate.organization.City,
+                    state = candidate.organization.State,
+                    leagueName = candidate.organization.LeagueName,
+                    similarityScore = Math.Round(candidate.score * 100, 0)
+                });
+
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            await response.WriteAsJsonAsync(matches);
+            return response;
+        }
+
         [Function("CreateOrganization")]
         public async Task<HttpResponseData> CreateOrganization(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "organizations")] HttpRequestData req)
@@ -114,8 +174,45 @@ namespace TipInAPI.Functions
                 return bad;
             }
 
+            var organizationName = dto.Name?.Trim();
+            if (dto.LeagueId == Guid.Empty || string.IsNullOrWhiteSpace(organizationName))
+            {
+                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+                await bad.WriteStringAsync("Organization name and league are required.");
+                return bad;
+            }
+
+            var existingOrganizationId = await _service.FindDuplicateIdAsync(organizationName, dto.LeagueId);
+            if (existingOrganizationId.HasValue)
+            {
+                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                await conflict.WriteAsJsonAsync(new
+                {
+                    message = "An organization with this name already exists in this league. Reuse it and manage its season participation instead of creating a duplicate.",
+                    existingOrganizationId = existingOrganizationId.Value
+                });
+                return conflict;
+            }
+
+            dto.Name = organizationName;
+
             // Create the organization
-            var org = await _service.CreateAsync(dto);
+            Organization org;
+            try
+            {
+                org = await _service.CreateAsync(dto);
+            }
+            catch (SqlException ex) when (ex.Number == 51001)
+            {
+                var duplicateId = await _service.FindDuplicateIdAsync(organizationName, dto.LeagueId);
+                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                await conflict.WriteAsJsonAsync(new
+                {
+                    message = "An organization with this name already exists in this league. Reuse it and manage its season participation instead of creating a duplicate.",
+                    existingOrganizationId = duplicateId
+                });
+                return conflict;
+            }
 
             // ⭐ AUTO‑CREATE ORG OWNER (this is the only new line)
             await _service.CreateOrgOwnerForOrganizationAsync(org);
@@ -176,6 +273,38 @@ namespace TipInAPI.Functions
             await _service.DeleteAsync(id);
             var response = req.CreateResponse(HttpStatusCode.NoContent);
             return response;
+        }
+
+        private static string NormalizeOrganizationName(string name)
+        {
+            var normalized = name.Trim().ToLowerInvariant();
+            normalized = Regex.Replace(normalized, @"\b(?:sr|senior)\b", "senior");
+            normalized = Regex.Replace(normalized, @"\b(?:jr|junior)\b", "junior");
+            normalized = Regex.Replace(normalized, @"\b(?:hs|high\s+school)\b", "highschool");
+            return Regex.Replace(normalized, @"[^a-z0-9]", string.Empty);
+        }
+
+        private static double SimilarityScore(string left, string right)
+        {
+            if (left.Length == 0 || right.Length == 0) return 0;
+            if (left == right) return 1;
+
+            var previous = Enumerable.Range(0, right.Length + 1).ToArray();
+            var current = new int[right.Length + 1];
+            for (var leftIndex = 1; leftIndex <= left.Length; leftIndex++)
+            {
+                current[0] = leftIndex;
+                for (var rightIndex = 1; rightIndex <= right.Length; rightIndex++)
+                {
+                    var substitutionCost = left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1;
+                    current[rightIndex] = Math.Min(
+                        Math.Min(current[rightIndex - 1] + 1, previous[rightIndex] + 1),
+                        previous[rightIndex - 1] + substitutionCost);
+                }
+                (previous, current) = (current, previous);
+            }
+
+            return 1d - (double)previous[right.Length] / Math.Max(left.Length, right.Length);
         }
     }
 }

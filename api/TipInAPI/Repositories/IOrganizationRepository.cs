@@ -10,6 +10,7 @@ namespace TipInAPI.Repositories
     {
         Task<IEnumerable<OrganizationListItemDto>> GetAllAsync();
         Task<OrganizationDto?> GetByIdAsync(Guid id);
+        Task<Guid?> FindDuplicateIdAsync(string name, Guid leagueId);
 
         // Updated: now accepts full Organization model
         Task CreateAsync(Organization org);

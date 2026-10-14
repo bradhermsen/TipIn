@@ -793,6 +793,7 @@ window.PageContentRegistry.organizationsModals = () => `
             <div>
               <label>Organization Name</label>
               <input id="org-name" class="nf-input" />
+              <div id="org-duplicate-check" class="org-duplicate-check" role="status" aria-live="polite" hidden></div>
             </div>
 
             <div>
