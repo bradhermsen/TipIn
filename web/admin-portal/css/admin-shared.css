@@ -1325,27 +1325,6 @@
   transform: scale(1.05);
 }
 
-.sidebar-submenu {
-  margin: 2px 0 8px 20px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.sidebar-link.sidebar-sub-link {
-  min-height: 36px;
-  padding: 7px 10px;
-  margin: 2px 0;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.sidebar-link.sidebar-sub-link::before {
-  width: 5px;
-  height: 5px;
-  margin-right: 9px;
-}
-
 #sidebarContainer {
   position: relative;
   z-index: 1;
