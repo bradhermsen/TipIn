@@ -3,7 +3,7 @@ name: Deploy Admin Portal Dev
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - web/admin-portal/**
       - .github/workflows/deploy-admin-portal-dev.yml
