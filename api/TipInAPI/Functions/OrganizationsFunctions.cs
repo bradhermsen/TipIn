@@ -280,8 +280,9 @@ namespace TipInAPI.Functions
             var normalized = name.Trim().ToLowerInvariant();
             normalized = Regex.Replace(normalized, @"\b(?:sr|senior)\b", "senior");
             normalized = Regex.Replace(normalized, @"\b(?:jr|junior)\b", "junior");
-            normalized = Regex.Replace(normalized, @"\b(?:hs|high\s+school)\b", "highschool");
-            return Regex.Replace(normalized, @"[^a-z0-9]", string.Empty);
+            normalized = Regex.Replace(normalized, @"\b(?:hs|high\s+school)\b", "high school");
+            normalized = Regex.Replace(normalized, @"[^\p{L}\p{N}]+", " ");
+            return Regex.Replace(normalized, @"\s+", " ").Trim();
         }
 
         private static double SimilarityScore(string left, string right)
@@ -289,14 +290,24 @@ namespace TipInAPI.Functions
             if (left.Length == 0 || right.Length == 0) return 0;
             if (left == right) return 1;
 
-            var previous = Enumerable.Range(0, right.Length + 1).ToArray();
-            var current = new int[right.Length + 1];
-            for (var leftIndex = 1; leftIndex <= left.Length; leftIndex++)
+            var leftTokens = left.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+            var rightTokens = right.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
+            var sharedTokens = leftTokens.Intersect(rightTokens).Count();
+            var shortestTokenCount = Math.Min(leftTokens.Count, rightTokens.Count);
+            var tokenCoverageScore = shortestTokenCount == 0
+                ? 0
+                : 0.9 * sharedTokens / shortestTokenCount;
+
+            var compactLeft = left.Replace(" ", string.Empty);
+            var compactRight = right.Replace(" ", string.Empty);
+            var previous = Enumerable.Range(0, compactRight.Length + 1).ToArray();
+            var current = new int[compactRight.Length + 1];
+            for (var leftIndex = 1; leftIndex <= compactLeft.Length; leftIndex++)
             {
                 current[0] = leftIndex;
-                for (var rightIndex = 1; rightIndex <= right.Length; rightIndex++)
+                for (var rightIndex = 1; rightIndex <= compactRight.Length; rightIndex++)
                 {
-                    var substitutionCost = left[leftIndex - 1] == right[rightIndex - 1] ? 0 : 1;
+                    var substitutionCost = compactLeft[leftIndex - 1] == compactRight[rightIndex - 1] ? 0 : 1;
                     current[rightIndex] = Math.Min(
                         Math.Min(current[rightIndex - 1] + 1, previous[rightIndex] + 1),
                         previous[rightIndex - 1] + substitutionCost);
@@ -304,7 +315,8 @@ namespace TipInAPI.Functions
                 (previous, current) = (current, previous);
             }
 
-            return 1d - (double)previous[right.Length] / Math.Max(left.Length, right.Length);
+            var editDistanceScore = 1d - (double)previous[compactRight.Length] / Math.Max(compactLeft.Length, compactRight.Length);
+            return Math.Max(tokenCoverageScore, editDistanceScore);
         }
     }
 }
