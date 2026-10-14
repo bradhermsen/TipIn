@@ -106,32 +106,6 @@ window.PageContentRegistry.teamsModals = () => `
             <div>
               <label>Team Name</label>
 
-          <section id="scheduleImportPreview" class="nf-card schedule-import-preview hidden" aria-labelledby="scheduleImportPreviewTitle">
-            <div class="schedule-import-preview-header">
-              <div>
-                <h2 id="scheduleImportPreviewTitle">GoBound Schedule Preview</h2>
-                <p>Preview only. No Organizations, Teams, or Games will be created.</p>
-              </div>
-              <button id="closeScheduleImportPreview" class="nf-btn nf-btn-secondary" type="button">Close</button>
-            </div>
-            <label class="schedule-import-file-label" for="scheduleImportCsvFile">GoBound CSV file</label>
-            <input id="scheduleImportCsvFile" class="nf-input" type="file" accept=".csv,text/csv" />
-            <div id="scheduleImportSummary" class="schedule-import-summary" aria-live="polite"></div>
-            <div id="scheduleImportMessages" class="schedule-import-messages"></div>
-            <div class="schedule-import-table-wrap">
-              <table class="schedule-import-table">
-                <thead>
-                  <tr>
-                    <th>Date</th><th>Time</th><th>Winona Team</th><th>Opponent</th>
-                    <th>Home/Away</th><th>Game Type</th><th>Venue</th><th>Preview Status</th>
-                  </tr>
-                </thead>
-                <tbody id="scheduleImportRows">
-                  <tr><td colspan="8">Choose a CSV file to preview its schedule rows.</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
               <input id="team-name" type="text" class="nf-input" />
             </div>
 
@@ -1633,7 +1607,7 @@ window.PageContentRegistry.schedules = () => `
     <div class="schedule-import-preview-header">
       <div>
         <h2 id="scheduleImportPreviewTitle">GoBound Schedule Preview</h2>
-        <p>Preview only. No Organizations, Teams, or Games will be created.</p>
+        <p>Preview the CSV, then approve missing opponent Organizations and Teams. Games are not imported here.</p>
       </div>
       <button id="closeScheduleImportPreview" class="nf-btn nf-btn-secondary" type="button">Close</button>
     </div>
@@ -1641,6 +1615,32 @@ window.PageContentRegistry.schedules = () => `
     <input id="scheduleImportCsvFile" class="nf-input" type="file" accept=".csv,text/csv" />
     <div id="scheduleImportSummary" class="schedule-import-summary" aria-live="polite"></div>
     <div id="scheduleImportMessages" class="schedule-import-messages"></div>
+    <section id="scheduleExternalSetupSection" class="schedule-external-setup hidden" aria-labelledby="scheduleExternalSetupTitle">
+      <div class="schedule-import-preview-header">
+        <div>
+          <h3 id="scheduleExternalSetupTitle">Review Missing Opponent Records</h3>
+          <p>Approve the External Organizations and season Teams needed by this schedule. This does not import Games.</p>
+        </div>
+      </div>
+      <div id="scheduleExternalSetupMessages" class="schedule-import-messages" aria-live="polite"></div>
+      <div id="scheduleExternalSetupList" class="schedule-external-setup-list"></div>
+      <div class="schedule-external-setup-actions">
+        <button id="createReviewedExternalRecords" class="nf-btn nf-btn-primary" type="button">Create Reviewed External Records</button>
+      </div>
+    </section>
+    <section id="scheduleVenueSetupSection" class="schedule-external-setup hidden" aria-labelledby="scheduleVenueSetupTitle">
+      <div class="schedule-import-preview-header">
+        <div>
+          <h3 id="scheduleVenueSetupTitle">Review Schedule Venues</h3>
+          <p>Keep away locations as external text. Create a Winona-managed Arena/Rink only after confirming both names. This does not import Games.</p>
+        </div>
+      </div>
+      <div id="scheduleVenueSetupMessages" class="schedule-import-messages" aria-live="polite"></div>
+      <div id="scheduleVenueSetupList" class="schedule-external-setup-list"></div>
+      <div class="schedule-external-setup-actions">
+        <button id="createReviewedManagedVenues" class="nf-btn nf-btn-primary" type="button" disabled>Create Reviewed Managed Venues</button>
+      </div>
+    </section>
     <div class="schedule-import-table-wrap">
       <table class="schedule-import-table">
         <thead>

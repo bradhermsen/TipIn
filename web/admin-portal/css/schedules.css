@@ -80,6 +80,84 @@
   color: #d89d36;
 }
 
+.schedule-external-setup {
+  margin: 16px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--nf-border-light);
+}
+
+.schedule-external-setup-list {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-opponent-proposal {
+  padding: 12px;
+  border: 1px solid var(--nf-border-light);
+  border-radius: 6px;
+}
+
+.schedule-opponent-proposal h4 {
+  margin: 0 0 10px;
+}
+
+.schedule-opponent-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 10px;
+}
+
+.schedule-opponent-teams {
+  margin-top: 10px;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-external-setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.schedule-external-setup {
+  margin: 16px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--nf-border-light);
+}
+
+.schedule-external-setup-list {
+  display: grid;
+  gap: 10px;
+}
+
+.schedule-opponent-proposal {
+  padding: 12px;
+  border: 1px solid var(--nf-border-light);
+  border-radius: 6px;
+}
+
+.schedule-opponent-proposal h4 {
+  margin: 0 0 10px;
+}
+
+.schedule-opponent-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr);
+  gap: 10px;
+}
+
+.schedule-opponent-teams {
+  margin-top: 10px;
+  color: var(--nf-text-muted);
+  font-size: 13px;
+}
+
+.schedule-external-setup-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
 @media (max-width: 760px) {
   .schedule-import-preview-header {
     align-items: stretch;
@@ -88,6 +166,10 @@
 
   .schedule-import-table {
     min-width: 850px;
+  }
+
+  .schedule-opponent-fields {
+    grid-template-columns: 1fr;
   }
 }
 .schedule-import-preview {
@@ -180,6 +262,10 @@
 
   .schedule-import-table {
     min-width: 850px;
+  }
+
+  .schedule-opponent-fields {
+    grid-template-columns: 1fr;
   }
 }
 /* Schedules Page — Page-specific only */
