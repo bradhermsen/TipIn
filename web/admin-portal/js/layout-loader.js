@@ -46,7 +46,10 @@ window.loadLayout = async function (pageKey) {
 
     // Highlight active link
     document.querySelectorAll(".sidebar-link").forEach((link) => {
-      if (link.getAttribute("href").includes(currentPage)) {
+      const href = link.getAttribute("href") || "";
+      const isSettingsChild =
+        currentPage.startsWith("settings-") && href === "settings.html";
+      if (href.includes(currentPage) || isSettingsChild) {
         link.classList.add("active");
       }
     });

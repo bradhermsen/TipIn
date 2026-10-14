@@ -471,10 +471,49 @@ window.PageContentRegistry.settings = () => `
     <div class="page-header-row">
       <div class="page-header-text">
         <h1 class="page-header">Settings</h1>
-        <p class="page-subtext">System configuration and outbound email delivery</p>
+        <p class="page-subtext">System configuration</p>
       </div>
     </div>
   </div>
+
+  <div class="settings-home-grid">
+    <a href="settings-email.html" class="nf-card settings-home-card">
+      <div><h2>Email</h2><p>SMTP delivery, recipients, and test messages.</p></div>
+      <span>Open</span>
+    </a>
+    <a href="settings-leagues.html" class="nf-card settings-home-card">
+      <div><h2>Leagues</h2><p>Manage leagues assigned to organizations.</p></div>
+      <span>Open</span>
+    </a>
+    <a href="settings-game-types.html" class="nf-card settings-home-card">
+      <div><h2>Game Types</h2><p>Manage game classification options.</p></div>
+      <span>Open</span>
+    </a>
+    <a href="settings-levels.html" class="nf-card settings-home-card">
+      <div><h2>Levels</h2><p>Manage levels assigned to teams.</p></div>
+      <span>Open</span>
+    </a>
+    <a href="settings-conferences.html" class="nf-card settings-home-card">
+      <div><h2>Conferences</h2><p>Manage conference options by league.</p></div>
+      <span>Open</span>
+    </a>
+    <a href="settings-sections.html" class="nf-card settings-home-card">
+      <div><h2>Sections</h2><p>Manage section options by league.</p></div>
+      <span>Open</span>
+    </a>
+  </div>
+`;
+
+window.PageContentRegistry["settings-email"] = () => `
+  <div class="page-header-block">
+    <div class="page-header-row">
+      <div class="page-header-text">
+        <h1 class="page-header">Settings / Email</h1>
+        <p class="page-subtext">System email delivery and recipients</p>
+      </div>
+    </div>
+  </div>
+  <a href="settings.html" class="settings-back-link">Back to Settings</a>
 
   <div class="nf-card settings-card">
     <h3 class="section-header">Email Server</h3>
@@ -593,6 +632,7 @@ window.PageContentRegistry["settings-leagues"] = () => `
     <h1 class="page-header">Settings / Leagues</h1>
     <p class="page-subtext">Manage leagues available when creating organizations.</p>
   </div>
+  <a href="settings.html" class="settings-back-link">Back to Settings</a>
   <div class="nf-card settings-card">
     <div class="settings-catalog-add">
       <label class="settings-field"><span>League Name</span><input id="settings-league-name" class="nf-input" type="text" maxlength="100" placeholder="League name" /></label>
@@ -608,6 +648,7 @@ window.PageContentRegistry["settings-game-types"] = () => `
     <h1 class="page-header">Settings / Game Types</h1>
     <p class="page-subtext">Manage the choices available when scheduling games.</p>
   </div>
+  <a href="settings.html" class="settings-back-link">Back to Settings</a>
   <div class="nf-card settings-card">
     <div class="settings-catalog-add">
       <label class="settings-field"><span>Game Type Name</span><input id="settings-game-type-name" class="nf-input" type="text" maxlength="100" placeholder="Game type name" /></label>
@@ -623,6 +664,7 @@ window.PageContentRegistry["settings-levels"] = () => `
     <h1 class="page-header">Settings / Levels</h1>
     <p class="page-subtext">Manage levels available when creating teams.</p>
   </div>
+  <a href="settings.html" class="settings-back-link">Back to Settings</a>
   <div class="nf-card settings-card">
     <div class="settings-catalog-add">
       <label class="settings-field"><span>Level Name</span><input id="settings-level-name" class="nf-input" type="text" maxlength="100" placeholder="Level name" /></label>
@@ -638,6 +680,7 @@ window.PageContentRegistry["settings-conferences"] = () => `
     <h1 class="page-header">Settings / Conferences</h1>
     <p class="page-subtext">Manage Conference options for teams, organized by League.</p>
   </div>
+  <a href="settings.html" class="settings-back-link">Back to Settings</a>
   <div class="nf-card settings-card">
     <div class="settings-catalog-add settings-catalog-add-wide">
       <label class="settings-field"><span>League</span><select id="settings-conference-league" class="nf-input"></select></label>
@@ -654,6 +697,7 @@ window.PageContentRegistry["settings-sections"] = () => `
     <h1 class="page-header">Settings / Sections</h1>
     <p class="page-subtext">Manage Section options for teams, organized by League.</p>
   </div>
+  <a href="settings.html" class="settings-back-link">Back to Settings</a>
   <div class="nf-card settings-card">
     <div class="settings-catalog-add settings-catalog-add-wide">
       <label class="settings-field"><span>League</span><select id="settings-section-league" class="nf-input"></select></label>
