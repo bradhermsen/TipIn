@@ -182,7 +182,7 @@ namespace TipInAPI.Functions
             if (deleteResult < 0)
             {
                 var conflict = req.CreateResponse(HttpStatusCode.Conflict);
-                await conflict.WriteStringAsync("Organizations are assigned to this league. Reassign them before removing it.");
+                await conflict.WriteStringAsync("Organizations, conferences, or sections are assigned to this league. Reassign or remove them before removing the league.");
                 return conflict;
             }
             return req.CreateResponse(HttpStatusCode.NoContent);

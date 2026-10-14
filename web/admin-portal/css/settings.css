@@ -32,6 +32,10 @@
   align-items: end;
 }
 
+.settings-catalog-add-wide {
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1fr) auto;
+}
+
 @media (max-width: 520px) {
   .settings-catalog-add {
     grid-template-columns: 1fr;

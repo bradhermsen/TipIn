@@ -476,40 +476,6 @@ window.PageContentRegistry.settings = () => `
     </div>
   </div>
 
-  <div class="settings-catalog-grid">
-    <div class="nf-card settings-card">
-      <h3 class="section-header">Leagues</h3>
-      <p class="settings-helper-text">
-        Manage the leagues available when creating organizations. Reassign organizations before removing a league in use.
-      </p>
-      <div class="settings-catalog-add">
-        <label class="settings-field">
-          <span>League Name</span>
-          <input id="settings-league-name" class="nf-input" type="text" maxlength="100" placeholder="League name" />
-        </label>
-        <button id="settings-add-league" class="nf-btn nf-btn-secondary" type="button">Add League</button>
-      </div>
-      <div id="settings-leagues-list" class="settings-media-list mt-3"></div>
-      <div id="settings-leagues-status" class="settings-save-status" aria-live="polite"></div>
-    </div>
-
-    <div class="nf-card settings-card">
-      <h3 class="section-header">Game Types</h3>
-      <p class="settings-helper-text">
-        Manage the choices available when scheduling games. A game type in use cannot be removed.
-      </p>
-      <div class="settings-catalog-add">
-        <label class="settings-field">
-          <span>Game Type Name</span>
-          <input id="settings-game-type-name" class="nf-input" type="text" maxlength="100" placeholder="Game type name" />
-        </label>
-        <button id="settings-add-game-type" class="nf-btn nf-btn-secondary" type="button">Add Game Type</button>
-      </div>
-      <div id="settings-game-types-list" class="settings-media-list mt-3"></div>
-      <div id="settings-game-types-status" class="settings-save-status" aria-live="polite"></div>
-    </div>
-  </div>
-
   <div class="nf-card settings-card">
     <h3 class="section-header">Email Server</h3>
     <p class="settings-helper-text">
@@ -619,6 +585,83 @@ window.PageContentRegistry.settings = () => `
     <div class="settings-actions mt-3">
       <button id="settings-test-send" class="nf-btn nf-btn-secondary">Send Test Email</button>
     </div>
+  </div>
+`;
+
+window.PageContentRegistry["settings-leagues"] = () => `
+  <div class="page-header-block">
+    <h1 class="page-header">Settings / Leagues</h1>
+    <p class="page-subtext">Manage leagues available when creating organizations.</p>
+  </div>
+  <div class="nf-card settings-card">
+    <div class="settings-catalog-add">
+      <label class="settings-field"><span>League Name</span><input id="settings-league-name" class="nf-input" type="text" maxlength="100" placeholder="League name" /></label>
+      <button id="settings-add-league" class="nf-btn nf-btn-primary" type="button">Add League</button>
+    </div>
+    <div id="settings-leagues-list" class="settings-media-list mt-3"></div>
+    <div id="settings-leagues-status" class="settings-save-status" aria-live="polite"></div>
+  </div>
+`;
+
+window.PageContentRegistry["settings-game-types"] = () => `
+  <div class="page-header-block">
+    <h1 class="page-header">Settings / Game Types</h1>
+    <p class="page-subtext">Manage the choices available when scheduling games.</p>
+  </div>
+  <div class="nf-card settings-card">
+    <div class="settings-catalog-add">
+      <label class="settings-field"><span>Game Type Name</span><input id="settings-game-type-name" class="nf-input" type="text" maxlength="100" placeholder="Game type name" /></label>
+      <button id="settings-add-game-type" class="nf-btn nf-btn-primary" type="button">Add Game Type</button>
+    </div>
+    <div id="settings-game-types-list" class="settings-media-list mt-3"></div>
+    <div id="settings-game-types-status" class="settings-save-status" aria-live="polite"></div>
+  </div>
+`;
+
+window.PageContentRegistry["settings-levels"] = () => `
+  <div class="page-header-block">
+    <h1 class="page-header">Settings / Levels</h1>
+    <p class="page-subtext">Manage levels available when creating teams.</p>
+  </div>
+  <div class="nf-card settings-card">
+    <div class="settings-catalog-add">
+      <label class="settings-field"><span>Level Name</span><input id="settings-level-name" class="nf-input" type="text" maxlength="100" placeholder="Level name" /></label>
+      <button id="settings-add-level" class="nf-btn nf-btn-primary" type="button">Add Level</button>
+    </div>
+    <div id="settings-levels-list" class="settings-media-list mt-3"></div>
+    <div id="settings-levels-status" class="settings-save-status" aria-live="polite"></div>
+  </div>
+`;
+
+window.PageContentRegistry["settings-conferences"] = () => `
+  <div class="page-header-block">
+    <h1 class="page-header">Settings / Conferences</h1>
+    <p class="page-subtext">Manage Conference options for teams, organized by League.</p>
+  </div>
+  <div class="nf-card settings-card">
+    <div class="settings-catalog-add settings-catalog-add-wide">
+      <label class="settings-field"><span>League</span><select id="settings-conference-league" class="nf-input"></select></label>
+      <label class="settings-field"><span>Conference</span><input id="settings-conference-name" class="nf-input" type="text" maxlength="100" placeholder="Conference name" /></label>
+      <button id="settings-add-conference" class="nf-btn nf-btn-primary" type="button">Add Conference</button>
+    </div>
+    <div id="settings-conferences-list" class="settings-media-list mt-3"></div>
+    <div id="settings-conferences-status" class="settings-save-status" aria-live="polite"></div>
+  </div>
+`;
+
+window.PageContentRegistry["settings-sections"] = () => `
+  <div class="page-header-block">
+    <h1 class="page-header">Settings / Sections</h1>
+    <p class="page-subtext">Manage Section options for teams, organized by League.</p>
+  </div>
+  <div class="nf-card settings-card">
+    <div class="settings-catalog-add settings-catalog-add-wide">
+      <label class="settings-field"><span>League</span><select id="settings-section-league" class="nf-input"></select></label>
+      <label class="settings-field"><span>Section</span><input id="settings-section-name" class="nf-input" type="text" maxlength="100" placeholder="Section name" /></label>
+      <button id="settings-add-section" class="nf-btn nf-btn-primary" type="button">Add Section</button>
+    </div>
+    <div id="settings-sections-list" class="settings-media-list mt-3"></div>
+    <div id="settings-sections-status" class="settings-save-status" aria-live="polite"></div>
   </div>
 `;
 
