@@ -1,0 +1,102 @@
+name: Deploy Game View Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: Type DEPLOY_PRODUCTION to deploy the production Game View site
+        required: true
+        type: choice
+        options:
+          - DO_NOT_DEPLOY
+          - DEPLOY_PRODUCTION
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: tipin-game-view-production
+  cancel-in-progress: false
+
+env:
+  STATIC_WEB_APP_NAME: swa-tipin-gameview-prod
+  RESOURCE_GROUP_NAME: rg-tipin-prod-edge-global
+  API_BASE_URL: https://func-tipin-api-prod-cus-01.azurewebsites.net/api
+  AZURE_CLIENT_ID: e8f777f6-c14d-4037-ae7e-6d9c12695ff3
+  AZURE_TENANT_ID: 42da914a-4f59-4b27-9146-44aa32e46587
+  AZURE_SUBSCRIPTION_ID: 22eed768-4fc5-4709-93f6-c31b3205a73b
+
+jobs:
+  build-and-deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Require explicit production confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirm_production }}
+        run: test "$CONFIRMATION" = "DEPLOY_PRODUCTION"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configure Production API URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          for (const path of ['web/game-view/config.json', 'web/game-view/public/config.json']) {
+            const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+            config.apiBase = process.env.API_BASE_URL;
+            fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          }
+          NODE
+
+      - name: Build Game View
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd web/game-view
+          npm ci
+          npm run build
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Read Static Web Apps deployment token
+        shell: bash
+        run: |
+          set -euo pipefail
+          token=$(az staticwebapp secrets list \
+            --name "$STATIC_WEB_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP_NAME" \
+            --query properties.apiKey \
+            --output tsv)
+          if [ -z "$token" ]; then
+            echo "Static Web App deployment token was not returned"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "SWA_API_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Deploy Game View
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_API_TOKEN }}
+          action: upload
+          app_location: web/game-view/dist
+          api_location: ""
+          output_location: ""
+          skip_app_build: true
