@@ -78,14 +78,34 @@ namespace TipInAPI.Repositories
             });
         }
 
-        public async Task DeleteAsync(Guid id)
+        public async Task<int> DeleteAsync(Guid id)
         {
-            var sql = @"
-                DELETE FROM Levels
-                WHERE Id = @Id;
-            ";
+            if (_db.State != ConnectionState.Open) _db.Open();
+            using var transaction = _db.BeginTransaction(IsolationLevel.Serializable);
 
-            await _db.ExecuteAsync(sql, new { Id = id });
+            var exists = await _db.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(1)
+                FROM dbo.Levels WITH (UPDLOCK, HOLDLOCK)
+                WHERE Id = @Id;", new { Id = id }, transaction);
+            if (exists == 0)
+            {
+                transaction.Commit();
+                return 0;
+            }
+
+            var teamCount = await _db.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(1)
+                FROM dbo.Teams WITH (UPDLOCK, HOLDLOCK)
+                WHERE LevelId = @Id;", new { Id = id }, transaction);
+            if (teamCount > 0)
+            {
+                transaction.Commit();
+                return -1;
+            }
+
+            await _db.ExecuteAsync("DELETE FROM dbo.Levels WHERE Id = @Id;", new { Id = id }, transaction);
+            transaction.Commit();
+            return 1;
         }
     }
 }

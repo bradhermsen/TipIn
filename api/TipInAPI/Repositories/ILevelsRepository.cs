@@ -11,6 +11,6 @@ namespace TipInAPI.Repositories
         Task<LevelDto?> GetByIdAsync(Guid id);
         Task<Guid> CreateAsync(CreateLevelDto dto);
         Task UpdateAsync(Guid id, UpdateLevelDto dto);
-        Task DeleteAsync(Guid id);
+        Task<int> DeleteAsync(Guid id);
     }
 }

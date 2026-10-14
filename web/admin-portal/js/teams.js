@@ -151,9 +151,34 @@ function normalizeConferenceDistrict(item) {
   return {
     id: item?.id || item?.conferenceDistrictId || "",
     name: item?.name || item?.conferenceDistrictName || "",
+    leagueId: item?.leagueId || item?.LeagueId || "",
     sortOrder: item?.sortOrder ?? 0,
     isActive: item?.isActive ?? true,
   };
+}
+
+function getSelectedTeamLeagueId() {
+  const organizationId = document.getElementById("team-org")?.value || "";
+  return teamOrganizationState.byId.get(organizationId)?.leagueId || "";
+}
+
+function populateTeamConferenceDropdown() {
+  const select = document.getElementById("team-conference-district");
+  if (!select) return;
+  const selectedValue = select.value || "";
+  const leagueId = getSelectedTeamLeagueId();
+  const options = teamConferenceDistrictState.list
+    .filter((item) => item.isActive && (!leagueId || String(item.leagueId) === String(leagueId)))
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+
+  select.innerHTML = `<option value="">Select Conference</option>`;
+  options.forEach((conference) => {
+    const option = document.createElement("option");
+    option.value = conference.id;
+    option.textContent = conference.name;
+    select.appendChild(option);
+  });
+  select.value = options.some((item) => String(item.id) === selectedValue) ? selectedValue : "";
 }
 
 function getTeamConferenceName(team) {
@@ -178,9 +203,29 @@ function normalizeSectionRegion(item) {
   return {
     id: item?.id || item?.sectionRegionId || "",
     name: item?.name || item?.sectionRegionName || "",
+    leagueId: item?.leagueId || item?.LeagueId || "",
     sortOrder: item?.sortOrder ?? 0,
     isActive: item?.isActive ?? true,
   };
+}
+
+function populateTeamSectionDropdown() {
+  const select = document.getElementById("team-section-region");
+  if (!select) return;
+  const selectedValue = select.value || "";
+  const leagueId = getSelectedTeamLeagueId();
+  const options = teamSectionRegionState.list
+    .filter((item) => item.isActive && (!leagueId || String(item.leagueId) === String(leagueId)))
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+
+  select.innerHTML = `<option value="">Select Section</option>`;
+  options.forEach((section) => {
+    const option = document.createElement("option");
+    option.value = section.id;
+    option.textContent = section.name;
+    select.appendChild(option);
+  });
+  select.value = options.some((item) => String(item.id) === selectedValue) ? selectedValue : "";
 }
 
 function getTeamSectionName(team) {
@@ -209,20 +254,7 @@ async function loadConferenceDistricts() {
 
   const modalSelect = document.getElementById("team-conference-district");
   if (modalSelect) {
-    const selectedValue = modalSelect.value || "";
-    modalSelect.innerHTML = `<option value="">Select Conference</option>`;
-
-    conferences
-      .filter((c) => c.isActive)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name))
-      .forEach((conference) => {
-        const opt = document.createElement("option");
-        opt.value = conference.id;
-        opt.textContent = conference.name;
-        modalSelect.appendChild(opt);
-      });
-
-    modalSelect.value = selectedValue;
+    populateTeamConferenceDropdown();
   }
 
   const filter = document.getElementById("filter-team-conference");
@@ -252,20 +284,7 @@ async function loadSectionRegions() {
 
   const modalSelect = document.getElementById("team-section-region");
   if (modalSelect) {
-    const selectedValue = modalSelect.value || "";
-    modalSelect.innerHTML = `<option value="">Select Section</option>`;
-
-    sections
-      .filter((s) => s.isActive)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name))
-      .forEach((section) => {
-        const opt = document.createElement("option");
-        opt.value = section.id;
-        opt.textContent = section.name;
-        modalSelect.appendChild(opt);
-      });
-
-    modalSelect.value = selectedValue;
+    populateTeamSectionDropdown();
   }
 
   const filter = document.getElementById("filter-team-section");
@@ -308,6 +327,8 @@ async function loadAllTeamDropdowns() {
     loadConferenceDistricts(),
     loadSectionRegions(),
   ]);
+  populateTeamConferenceDropdown();
+  populateTeamSectionDropdown();
 }
 
 // ------------------------------
@@ -333,6 +354,7 @@ async function loadTeamOrganizations() {
           name: o.name || "",
           mascot: o.mascot || "",
           organizationType: o.organizationType || "Managed",
+          leagueId: o.leagueId || "",
         });
       }
     });
@@ -867,6 +889,8 @@ function initTeamsPage() {
       document.getElementById("team-abbreviation").value =
         team.abbreviation ?? "";
       document.getElementById("team-org").value = team.organizationId || "";
+      populateTeamConferenceDropdown();
+      populateTeamSectionDropdown();
       document.getElementById("team-conference-district").value =
         conferenceId;
       document.getElementById("team-section-region").value = sectionId;
@@ -1012,6 +1036,8 @@ function initTeamsPage() {
     teamOrg.addEventListener("change", () => {
       applyTeamMascotRules();
       updateAccessCodeGeneratorState();
+      populateTeamConferenceDropdown();
+      populateTeamSectionDropdown();
     });
   }
 

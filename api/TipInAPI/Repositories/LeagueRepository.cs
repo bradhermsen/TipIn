@@ -22,7 +22,9 @@ namespace TipInAPI.Repositories
                 SELECT 
                     l.Id AS LeagueId,
                     l.Name AS LeagueName,
-                    COUNT(o.OrganizationId) AS OrganizationCount
+                    COUNT(DISTINCT o.OrganizationId) AS OrganizationCount,
+                    (SELECT COUNT(1) FROM dbo.ConferenceDistricts cd WHERE cd.LeagueId = l.Id) AS ConferenceCount,
+                    (SELECT COUNT(1) FROM dbo.SectionRegions sr WHERE sr.LeagueId = l.Id) AS SectionCount
                 FROM Leagues l
                 LEFT JOIN Organizations o ON o.LeagueId = l.Id
                 GROUP BY l.Id, l.Name
@@ -97,7 +99,15 @@ namespace TipInAPI.Repositories
                 SELECT COUNT(1)
                 FROM dbo.Organizations WITH (UPDLOCK, HOLDLOCK)
                 WHERE LeagueId = @Id;", new { Id = id }, transaction);
-            if (organizationCount > 0)
+            var conferenceCount = await _db.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(1)
+                FROM dbo.ConferenceDistricts WITH (UPDLOCK, HOLDLOCK)
+                WHERE LeagueId = @Id;", new { Id = id }, transaction);
+            var sectionCount = await _db.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(1)
+                FROM dbo.SectionRegions WITH (UPDLOCK, HOLDLOCK)
+                WHERE LeagueId = @Id;", new { Id = id }, transaction);
+            if (organizationCount > 0 || conferenceCount > 0 || sectionCount > 0)
             {
                 transaction.Commit();
                 return -1;

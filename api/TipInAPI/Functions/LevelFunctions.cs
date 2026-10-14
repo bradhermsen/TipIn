@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
@@ -105,9 +106,24 @@ namespace TipInAPI.Functions
                 return await AuthorizationHelper.ForbiddenResponse(req, "Insufficient role");
 
             var dto = await req.ReadFromJsonAsync<CreateLevelDto>();
-            if (dto == null)
-                return req.CreateResponse(HttpStatusCode.BadRequest);
+            var levelName = dto?.LevelName?.Trim();
+            if (string.IsNullOrWhiteSpace(levelName))
+            {
+                var badRequest = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badRequest.WriteStringAsync("Level name is required.");
+                return badRequest;
+            }
 
+            var existingLevels = await _service.GetAllAsync();
+            if (existingLevels.Any(level =>
+                    string.Equals(level.LevelName?.Trim(), levelName, StringComparison.OrdinalIgnoreCase)))
+            {
+                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                await conflict.WriteStringAsync("That level already exists.");
+                return conflict;
+            }
+
+            dto!.LevelName = levelName;
             var id = await _service.CreateAsync(dto);
             var response = req.CreateResponse(HttpStatusCode.Created);
             await response.WriteAsJsonAsync(new { LevelId = id });
@@ -154,7 +170,15 @@ namespace TipInAPI.Functions
             if (!_authorizationService.HasAnyRole(role, "SuperAdmin", "OrgAdmin"))
                 return await AuthorizationHelper.ForbiddenResponse(req, "Insufficient role");
 
-            await _service.DeleteAsync(id);
+            var deleteResult = await _service.DeleteAsync(id);
+            if (deleteResult == 0)
+                return req.CreateResponse(HttpStatusCode.NotFound);
+            if (deleteResult < 0)
+            {
+                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                await conflict.WriteStringAsync("Teams use this level. Reassign them before removing it.");
+                return conflict;
+            }
             return req.CreateResponse(HttpStatusCode.NoContent);
         }
     }

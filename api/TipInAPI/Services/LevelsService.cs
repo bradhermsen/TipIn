@@ -27,7 +27,7 @@ namespace TipInAPI.Services
         public Task UpdateAsync(Guid id, UpdateLevelDto dto)
             => _repository.UpdateAsync(id, dto);
 
-        public Task DeleteAsync(Guid id)
+        public Task<int> DeleteAsync(Guid id)
             => _repository.DeleteAsync(id);
     }
 }
