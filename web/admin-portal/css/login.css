@@ -106,3 +106,7 @@
   text-align: center;
   display: none;
 }
+
+.login-error:not(:empty) {
+  display: block;
+}
