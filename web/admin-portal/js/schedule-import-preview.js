@@ -81,6 +81,13 @@ function goBoundDivision(activity) {
   return "";
 }
 
+function goBoundTeamType(activity) {
+  const value = String(activity || "").toLowerCase();
+  if (/\bboys?\b/.test(value)) return "Boys";
+  if (/\bgirls?\b/.test(value)) return "Girls";
+  return "";
+}
+
 function organizationNameMatch(candidateName, opponentName) {
   const candidate = normalizeScheduleName(candidateName);
   const opponent = normalizeScheduleName(opponentName);
@@ -92,10 +99,10 @@ function organizationNameMatch(candidateName, opponentName) {
   return opponentWords.length > 0 && opponentWords.every((word) => candidateWords.has(word));
 }
 
-function findWinonaTeam(division) {
+function findWinonaTeam(division, teamType) {
   return goBoundPreviewState.teams.find((team) =>
-    String(team.teamType || "").toLowerCase() === "boys" &&
-    String(team.levelName || "").toLowerCase() === division &&
+    String(team.teamType || "").toLowerCase() === String(teamType || "").toLowerCase() &&
+    String(team.levelName || "").toLowerCase() === String(division || "").toLowerCase() &&
     normalizeScheduleName(`${team.organizationName || ""} ${team.name || ""}`).includes("winona"),
   );
 }
@@ -156,7 +163,8 @@ function classifyGoBoundRow(row) {
   const activity = row.activity || "";
   const direction = goBoundOpponent(event);
   const division = goBoundDivision(activity);
-  const winonaTeam = division ? findWinonaTeam(division) : null;
+  const teamType = goBoundTeamType(activity);
+  const winonaTeam = division && teamType ? findWinonaTeam(division, teamType) : null;
   const classification = (row.cnc || "").trim().toUpperCase();
   const gameTypeName = classification === "C"
     ? "Conference"
@@ -170,7 +178,10 @@ function classifyGoBoundRow(row) {
   const problems = [];
 
   if (!division) problems.push("Unrecognized Varsity/JV activity");
-  else if (!winonaTeam) problems.push(`Winona Boys ${division} Team not found in active Season`);
+  if (!teamType) problems.push("Unrecognized Team Type in activity");
+  if (division && teamType && !winonaTeam) {
+    problems.push(`Winona ${teamType} ${division} Team not found in active Season`);
+  }
   if (!direction.opponent) problems.push("Could not determine opponent/home-away from Event");
   else if (!opponent?.ready) problems.push(opponent?.label || "Opponent Team needs mapping");
   if (!row.date || !row.time) problems.push("Date or time missing");
@@ -182,6 +193,10 @@ function classifyGoBoundRow(row) {
     sourceEvent: event,
     activity,
     division,
+    teamName: winonaTeam?.name || "Winona",
+    levelName: winonaTeam?.levelName || division,
+    teamType: winonaTeam?.teamType || teamType,
+    winonaTeamId: winonaTeam?.teamId || null,
     opponent: direction.opponent,
     homeAway: direction.winonaIsHome === null ? "Unknown" : direction.winonaIsHome ? "Home" : "Away",
     date: row.date,
@@ -219,7 +234,7 @@ function renderGoBoundPreview(rows, fileRowCount, skippedScrimmages, duplicates)
     : "Preview only: this page has not created or changed any database records.";
 
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="8">No eligible non-scrimmage game rows found.</td></tr>';
+    body.innerHTML = '<tr><td colspan="10">No eligible non-scrimmage game rows found.</td></tr>';
     return;
   }
 
@@ -227,7 +242,9 @@ function renderGoBoundPreview(rows, fileRowCount, skippedScrimmages, duplicates)
     <tr>
       <td>${escapeGoBoundPreview(row.date)}</td>
       <td>${escapeGoBoundPreview(row.time)}</td>
-      <td>${escapeGoBoundPreview(row.division ? `Winona Boys ${row.division}` : row.activity)}</td>
+      <td>${escapeGoBoundPreview(row.teamName)}</td>
+      <td>${escapeGoBoundPreview(row.levelName)}</td>
+      <td>${escapeGoBoundPreview(row.teamType)}</td>
       <td>${escapeGoBoundPreview(row.opponent)}</td>
       <td>${escapeGoBoundPreview(row.homeAway)}</td>
       <td>${escapeGoBoundPreview(row.gameType)}</td>
@@ -266,7 +283,7 @@ async function previewGoBoundCsv(file) {
     renderGoBoundPreview(previewRows, sourceRows.length, scrimmages.length, duplicates);
   } catch (error) {
     summaryMessage(`Preview failed: ${error.message || "Unable to read schedule."}`);
-    body.innerHTML = '<tr><td colspan="8">Unable to preview this file.</td></tr>';
+    body.innerHTML = '<tr><td colspan="10">Unable to preview this file.</td></tr>';
   }
 }
 
