@@ -16,6 +16,13 @@ const OrgApi = {
     return await res.json();
   },
 
+  async findSimilar(name, leagueId) {
+    const params = new URLSearchParams({ name, leagueId });
+    const res = await authFetch(`/organizations/similar?${params.toString()}`);
+    if (!res.ok) throw new Error("Failed to check for similar organizations");
+    return await res.json();
+  },
+
   async create(dto) {
     const res = await authFetch("/organizations", {
       method: "POST",
@@ -23,7 +30,18 @@ const OrgApi = {
       body: JSON.stringify(dto),
     });
 
-    if (!res.ok) throw new Error("Failed to create organization");
+    if (!res.ok) {
+      let details = {};
+      try {
+        details = await res.json();
+      } catch {
+        // Some API errors return plain text.
+      }
+      const error = new Error(details.message || "Failed to create organization");
+      error.status = res.status;
+      error.existingOrganizationId = details.existingOrganizationId || null;
+      throw error;
+    }
     const result = await res.json();
     if (window.SeasonContext) window.SeasonContext.clear();
     return result;

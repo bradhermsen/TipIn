@@ -108,6 +108,18 @@ WHERE o.OrganizationId = @Id;
             return await _db.QueryFirstOrDefaultAsync<OrganizationDto>(sql, new { Id = id });
         }
 
+        public Task<Guid?> FindDuplicateIdAsync(string name, Guid leagueId)
+        {
+            const string sql = @"
+                SELECT TOP 1 OrganizationId
+                FROM dbo.Organizations
+                WHERE LeagueId = @LeagueId
+                  AND LOWER(LTRIM(RTRIM(Name))) = LOWER(LTRIM(RTRIM(@Name)))
+                ORDER BY IsActive DESC, CreatedAt ASC;";
+
+            return _db.QueryFirstOrDefaultAsync<Guid?>(sql, new { Name = name, LeagueId = leagueId });
+        }
+
         // ============================================================
         // CREATE (now accepts full Organization model)
         // ============================================================
@@ -115,7 +127,16 @@ WHERE o.OrganizationId = @Id;
         {
             var sql = @"
 SET XACT_ABORT ON;
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
 BEGIN TRANSACTION;
+
+IF EXISTS (
+    SELECT 1
+    FROM dbo.Organizations WITH (UPDLOCK, HOLDLOCK)
+    WHERE LeagueId = @LeagueId
+      AND LOWER(LTRIM(RTRIM(Name))) = LOWER(LTRIM(RTRIM(@Name)))
+)
+    THROW 51001, 'An organization with this name already exists in this league.', 1;
 
 INSERT INTO Organizations (
     OrganizationId,
