@@ -1,4 +1,6 @@
 let mediaOutletsState = [];
+let leaguesState = [];
+let gameTypesState = [];
 
 (function checkPermission() {
   if (!Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin)) {
@@ -18,7 +20,11 @@ async function initSettingsPage() {
   if (!document.getElementById("smtp-host")) return;
 
   wireSettingsEvents();
-  await loadEmailSettings();
+  await Promise.all([
+    loadEmailSettings(),
+    loadLeagueCatalog(),
+    loadGameTypeCatalog(),
+  ]);
 }
 
 function wireSettingsEvents() {
@@ -26,6 +32,8 @@ function wireSettingsEvents() {
   const saveMediaBtn = document.getElementById("settings-save-media");
   const testBtn = document.getElementById("settings-test-send");
   const addMediaBtn = document.getElementById("media-outlet-add");
+  const addLeagueBtn = document.getElementById("settings-add-league");
+  const addGameTypeBtn = document.getElementById("settings-add-game-type");
 
   if (saveEmailBtn) {
     saveEmailBtn.onclick = async () => {
@@ -49,6 +57,185 @@ function wireSettingsEvents() {
     addMediaBtn.onclick = () => {
       addMediaOutlet();
     };
+  }
+
+  if (addLeagueBtn) addLeagueBtn.onclick = addLeague;
+  if (addGameTypeBtn) addGameTypeBtn.onclick = addGameType;
+}
+
+function setCatalogStatus(catalog, message = "", state = "idle") {
+  const el = document.getElementById(`settings-${catalog}-status`);
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("is-success", "is-error", "is-working");
+  if (state === "success") el.classList.add("is-success");
+  if (state === "error") el.classList.add("is-error");
+  if (state === "working") el.classList.add("is-working");
+}
+
+async function responseError(response, fallback) {
+  try {
+    return (await response.text()) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function loadLeagueCatalog() {
+  const list = document.getElementById("settings-leagues-list");
+  if (!list) return;
+
+  try {
+    const response = await authFetch("/leagues");
+    if (!response?.ok) throw new Error(await responseError(response, "Failed to load leagues."));
+    leaguesState = await response.json();
+    renderLeagueCatalog();
+  } catch (error) {
+    list.innerHTML = `<div class="settings-helper-text">${escapeHtml(error.message || "Failed to load leagues.")}</div>`;
+  }
+}
+
+function renderLeagueCatalog() {
+  const list = document.getElementById("settings-leagues-list");
+  if (!list) return;
+
+  if (!leaguesState.length) {
+    list.innerHTML = '<div class="settings-helper-text">No leagues configured.</div>';
+    return;
+  }
+
+  list.innerHTML = leaguesState.map((league) => {
+    const organizationCount = Number(league.organizationCount || 0);
+    return `
+      <div class="settings-media-row">
+        <div class="settings-media-meta">
+          <span class="settings-media-name">${escapeHtml(league.leagueName)}</span>
+          <span class="settings-helper-text">${organizationCount} organization${organizationCount === 1 ? "" : "s"}</span>
+        </div>
+        <button class="nf-btn nf-btn-danger" type="button" data-delete-league="${escapeHtml(league.leagueId)}" ${organizationCount ? "disabled title=\"Reassign organizations before removing this league\"" : ""}>Remove</button>
+      </div>
+    `;
+  }).join("");
+
+  list.querySelectorAll("[data-delete-league]").forEach((button) => {
+    button.addEventListener("click", () => removeLeague(button.dataset.deleteLeague));
+  });
+}
+
+async function addLeague() {
+  const input = document.getElementById("settings-league-name");
+  const leagueName = input?.value?.trim() || "";
+  if (!leagueName) {
+    setCatalogStatus("leagues", "League name is required.", "error");
+    return;
+  }
+
+  setCatalogStatus("leagues", "Adding league...", "working");
+  try {
+    const response = await authFetch("/leagues", {
+      method: "POST",
+      body: JSON.stringify({ leagueName, isActive: true }),
+    });
+    if (!response?.ok) throw new Error(await responseError(response, "Failed to add league."));
+    input.value = "";
+    await loadLeagueCatalog();
+    setCatalogStatus("leagues", "League added.", "success");
+  } catch (error) {
+    setCatalogStatus("leagues", error.message || "Failed to add league.", "error");
+  }
+}
+
+async function removeLeague(leagueId) {
+  if (!leagueId || !window.confirm("Remove this league?")) return;
+  setCatalogStatus("leagues", "Removing league...", "working");
+  try {
+    const response = await authFetch(`/leagues/${encodeURIComponent(leagueId)}`, {
+      method: "DELETE",
+    });
+    if (!response?.ok) throw new Error(await responseError(response, "Failed to remove league."));
+    await loadLeagueCatalog();
+    setCatalogStatus("leagues", "League removed.", "success");
+  } catch (error) {
+    setCatalogStatus("leagues", error.message || "Failed to remove league.", "error");
+  }
+}
+
+async function loadGameTypeCatalog() {
+  const list = document.getElementById("settings-game-types-list");
+  if (!list) return;
+
+  try {
+    const response = await authFetch("/gametypes");
+    if (!response?.ok) throw new Error(await responseError(response, "Failed to load game types."));
+    gameTypesState = await response.json();
+    renderGameTypeCatalog();
+  } catch (error) {
+    list.innerHTML = `<div class="settings-helper-text">${escapeHtml(error.message || "Failed to load game types.")}</div>`;
+  }
+}
+
+function renderGameTypeCatalog() {
+  const list = document.getElementById("settings-game-types-list");
+  if (!list) return;
+
+  if (!gameTypesState.length) {
+    list.innerHTML = '<div class="settings-helper-text">No game types configured.</div>';
+    return;
+  }
+
+  list.innerHTML = gameTypesState.map((gameType) => {
+    const gameCount = Number(gameType.gameCount || 0);
+    return `
+      <div class="settings-media-row">
+        <div class="settings-media-meta">
+          <span class="settings-media-name">${escapeHtml(gameType.name)}</span>
+          <span class="settings-helper-text">${gameCount} game${gameCount === 1 ? "" : "s"}</span>
+        </div>
+        <button class="nf-btn nf-btn-danger" type="button" data-delete-game-type="${escapeHtml(gameType.gameTypeId)}" ${gameCount ? "disabled title=\"This type is used by games\"" : ""}>Remove</button>
+      </div>
+    `;
+  }).join("");
+
+  list.querySelectorAll("[data-delete-game-type]").forEach((button) => {
+    button.addEventListener("click", () => removeGameType(button.dataset.deleteGameType));
+  });
+}
+
+async function addGameType() {
+  const input = document.getElementById("settings-game-type-name");
+  const name = input?.value?.trim() || "";
+  if (!name) {
+    setCatalogStatus("game-types", "Game type name is required.", "error");
+    return;
+  }
+
+  setCatalogStatus("game-types", "Adding game type...", "working");
+  try {
+    const response = await authFetch("/gametypes", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    if (!response?.ok) throw new Error(await responseError(response, "Failed to add game type."));
+    input.value = "";
+    await loadGameTypeCatalog();
+    setCatalogStatus("game-types", "Game type added.", "success");
+  } catch (error) {
+    setCatalogStatus("game-types", error.message || "Failed to add game type.", "error");
+  }
+}
+
+async function removeGameType(gameTypeId) {
+  if (!gameTypeId || !window.confirm("Remove this game type?")) return;
+  setCatalogStatus("game-types", "Removing game type...", "working");
+  try {
+    const response = await authFetch(`/gametypes/${encodeURIComponent(gameTypeId)}`, {
+      method: "DELETE",
+    });
+    if (!response?.ok) throw new Error(await responseError(response, "Failed to remove game type."));
+    await loadGameTypeCatalog();
+    setCatalogStatus("game-types", "Game type removed.", "success");
+  } catch (error) {
+    setCatalogStatus("game-types", error.message || "Failed to remove game type.", "error");
   }
 }
 

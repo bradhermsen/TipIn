@@ -11,6 +11,6 @@ namespace TipInAPI.Repositories
         Task<LeagueDto?> GetByIdAsync(Guid id);
         Task<Guid> CreateAsync(CreateLeagueDto dto);
         Task UpdateAsync(Guid id, UpdateLeagueDto dto);
-        Task DeleteAsync(Guid id);
+        Task<int> DeleteAsync(Guid id);
     }
 }

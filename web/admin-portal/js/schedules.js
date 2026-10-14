@@ -610,13 +610,61 @@ function populateScheduleDropdowns({
   wireGameOrganizationFilter();
   wireOrganizationTeamChange();
 
-  fillSelect("game-type", allGameTypes, "gameTypeId", "name");
-  fillSelect("game-round", allGameRounds, "gameRoundId", "roundName", true);
+  fillSelect("game-type", allGameTypes, "gameTypeId", "name", true);
+  const gameTypeSelect = document.getElementById("game-type");
+  if (gameTypeSelect?.options[0]) {
+    gameTypeSelect.options[0].textContent = "Select Game Type";
+  }
+  if (gameTypeSelect) {
+    gameTypeSelect.onchange = () => updateGameRoundDropdown();
+  }
+  updateGameRoundDropdown();
   populateOfficialsSelect("game-referee-1", "Referee", "Select Referee 1");
   populateOfficialsSelect("game-referee-2", "Referee", "Select Referee 2");
   populateOfficialsSelect("game-linesman-1", "Linesman", "Select Linesman 1");
   populateOfficialsSelect("game-linesman-2", "Linesman", "Select Linesman 2");
   wireOfficialSelectionUniqueness();
+}
+
+function updateGameRoundDropdown(selectedGameRoundId = "") {
+  const gameTypeSelect = document.getElementById("game-type");
+  const gameRoundSelect = document.getElementById("game-round");
+  if (!gameTypeSelect || !gameRoundSelect) return;
+
+  const selectedTypeId = gameTypeSelect.value;
+  const selectedType = allGameTypes.find(
+    (type) => String(type.gameTypeId) === String(selectedTypeId),
+  );
+  const isTournament =
+    String(selectedType?.name || "").trim().toLowerCase() === "tournament";
+  const applicableRounds = isTournament
+    ? allGameRounds.filter(
+        (round) => String(round.gameTypeId) === String(selectedTypeId),
+      )
+    : [];
+
+  gameRoundSelect.innerHTML = `<option value="">${isTournament ? "Select Game Round" : "Only available for Tournament"}</option>`;
+  applicableRounds.forEach((round) => {
+    const option = document.createElement("option");
+    option.value = round.gameRoundId;
+    option.textContent = round.roundName;
+    gameRoundSelect.appendChild(option);
+  });
+
+  if (!isTournament && selectedGameRoundId) {
+    const existingRound = allGameRounds.find(
+      (round) => String(round.gameRoundId) === String(selectedGameRoundId),
+    );
+    if (existingRound) {
+      const option = document.createElement("option");
+      option.value = existingRound.gameRoundId;
+      option.textContent = `${existingRound.roundName} (existing)`;
+      gameRoundSelect.appendChild(option);
+    }
+  }
+
+  gameRoundSelect.disabled = !isTournament;
+  gameRoundSelect.value = selectedGameRoundId || "";
 }
 
 function populateOfficialsSelect(selectId, role, placeholder) {
@@ -1412,7 +1460,7 @@ async function openAddGame(options = {}) {
   document.getElementById("game-rink-custom").value = "";
   document.getElementById("game-venue-address").value = "";
   document.getElementById("game-type").value = "";
-  document.getElementById("game-round").value = "";
+  updateGameRoundDropdown();
   document.getElementById("game-referee-1").value = "";
   document.getElementById("game-referee-2").value = "";
   document.getElementById("game-linesman-1").value = "";
@@ -1471,7 +1519,7 @@ async function openEditGame(id) {
     wireVenueControls();
 
     document.getElementById("game-type").value = g.gameTypeId;
-    document.getElementById("game-round").value = g.gameRoundId ?? "";
+    updateGameRoundDropdown(g.gameRoundId ?? "");
     document.getElementById("game-referee-1").value =
       g.referee1OfficialId ?? "";
     document.getElementById("game-referee-2").value =

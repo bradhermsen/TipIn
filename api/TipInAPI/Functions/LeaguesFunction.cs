@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
@@ -107,9 +108,24 @@ namespace TipInAPI.Functions
                 return await AuthorizationHelper.ForbiddenResponse(req, "Only SuperAdmin or OrgAdmin can create leagues");
 
             var dto = await req.ReadFromJsonAsync<CreateLeagueDto>();
-            if (dto == null)
-                return req.CreateResponse(HttpStatusCode.BadRequest);
+            var leagueName = dto?.LeagueName?.Trim();
+            if (string.IsNullOrWhiteSpace(leagueName))
+            {
+                var badRequest = req.CreateResponse(HttpStatusCode.BadRequest);
+                await badRequest.WriteStringAsync("League name is required.");
+                return badRequest;
+            }
 
+            var existingLeagues = await _service.GetAllAsync();
+            if (existingLeagues.Any(league =>
+                    string.Equals(league.LeagueName?.Trim(), leagueName, StringComparison.OrdinalIgnoreCase)))
+            {
+                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                await conflict.WriteStringAsync("That league already exists.");
+                return conflict;
+            }
+
+            dto!.LeagueName = leagueName;
             var id = await _service.CreateAsync(dto);
             var response = req.CreateResponse(HttpStatusCode.Created);
             await response.WriteAsJsonAsync(new { LeagueId = id });
@@ -160,7 +176,15 @@ namespace TipInAPI.Functions
             if (!_authorizationService.HasAnyRole(role, "SuperAdmin", "OrgAdmin"))
                 return await AuthorizationHelper.ForbiddenResponse(req, "Only SuperAdmin or OrgAdmin can delete leagues");
 
-            await _service.DeleteAsync(id);
+            var deleteResult = await _service.DeleteAsync(id);
+            if (deleteResult == 0)
+                return req.CreateResponse(HttpStatusCode.NotFound);
+            if (deleteResult < 0)
+            {
+                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                await conflict.WriteStringAsync("Organizations are assigned to this league. Reassign them before removing it.");
+                return conflict;
+            }
             return req.CreateResponse(HttpStatusCode.NoContent);
         }
     }

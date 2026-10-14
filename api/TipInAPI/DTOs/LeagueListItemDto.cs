@@ -7,5 +7,6 @@ namespace TipInAPI.DTOs
         public Guid LeagueId { get; set; }
         public string? LeagueName { get; set; }
         public bool IsActive { get; set; }
+        public int OrganizationCount { get; set; }
     }
 }

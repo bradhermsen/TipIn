@@ -476,6 +476,40 @@ window.PageContentRegistry.settings = () => `
     </div>
   </div>
 
+  <div class="settings-catalog-grid">
+    <div class="nf-card settings-card">
+      <h3 class="section-header">Leagues</h3>
+      <p class="settings-helper-text">
+        Manage the leagues available when creating organizations. Reassign organizations before removing a league in use.
+      </p>
+      <div class="settings-catalog-add">
+        <label class="settings-field">
+          <span>League Name</span>
+          <input id="settings-league-name" class="nf-input" type="text" maxlength="100" placeholder="League name" />
+        </label>
+        <button id="settings-add-league" class="nf-btn nf-btn-secondary" type="button">Add League</button>
+      </div>
+      <div id="settings-leagues-list" class="settings-media-list mt-3"></div>
+      <div id="settings-leagues-status" class="settings-save-status" aria-live="polite"></div>
+    </div>
+
+    <div class="nf-card settings-card">
+      <h3 class="section-header">Game Types</h3>
+      <p class="settings-helper-text">
+        Manage the choices available when scheduling games. A game type in use cannot be removed.
+      </p>
+      <div class="settings-catalog-add">
+        <label class="settings-field">
+          <span>Game Type Name</span>
+          <input id="settings-game-type-name" class="nf-input" type="text" maxlength="100" placeholder="Game type name" />
+        </label>
+        <button id="settings-add-game-type" class="nf-btn nf-btn-secondary" type="button">Add Game Type</button>
+      </div>
+      <div id="settings-game-types-list" class="settings-media-list mt-3"></div>
+      <div id="settings-game-types-status" class="settings-save-status" aria-live="polite"></div>
+    </div>
+  </div>
+
   <div class="nf-card settings-card">
     <h3 class="section-header">Email Server</h3>
     <p class="settings-helper-text">
