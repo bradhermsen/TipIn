@@ -2,8 +2,6 @@
 // ORGANIZATIONS PAGE — MODERNIZED + COMPATIBLE VERSION
 // =========================================================
 
-const ORG_GROUP_PAGE_SIZE = 10;
-const orgGroupPaginationState = {};
 let organizationDuplicateCheckTimer = null;
 let organizationDuplicateRequestId = 0;
 let organizationDuplicateCandidates = [];
@@ -40,12 +38,6 @@ async function loadOrganizationFacilities(organizationId) {
   } catch (error) {
     list.innerHTML = `<div class="org-facility-rinks">${orgFacilityEscape(error.message)}</div>`;
   }
-}
-
-function resetOrgGroupPagination() {
-  Object.keys(orgGroupPaginationState).forEach(
-    (k) => delete orgGroupPaginationState[k],
-  );
 }
 
 function getFilteredOrganizations() {
@@ -204,49 +196,23 @@ function renderOrganizationsGrouped(orgs) {
     return;
   }
 
-  const statusGroups = {
-    active: orgs.filter((org) => org.isActive),
-    inactive: orgs.filter((org) => !org.isActive),
-  };
+  const byLeague = new Map();
+  orgs.forEach((org) => {
+    const leagueKey = org.leagueId || "no-league";
+    const leagueLabel = org.leagueName || "No League";
+    if (!byLeague.has(leagueKey)) {
+      byLeague.set(leagueKey, { label: leagueLabel, organizations: [] });
+    }
+    byLeague.get(leagueKey).organizations.push(org);
+  });
 
-  const statusOrder = ["active", "inactive"].filter(
-    (key) => statusGroups[key].length > 0,
-  );
-
-  container.innerHTML = statusOrder
-    .map((statusKey, statusIndex) => {
-      const statusLabel = statusKey === "active" ? "Active" : "Inactive";
-      const statusItems = [...statusGroups[statusKey]].sort((a, b) =>
-        (a.name || "").localeCompare(b.name || ""),
-      );
-
-      const totalPages = Math.max(
-        1,
-        Math.ceil(statusItems.length / ORG_GROUP_PAGE_SIZE),
-      );
-      const currentPage = Math.min(
-        orgGroupPaginationState[statusKey] || 1,
-        totalPages,
-      );
-      orgGroupPaginationState[statusKey] = currentPage;
-
-      const paged = statusItems.slice(
-        (currentPage - 1) * ORG_GROUP_PAGE_SIZE,
-        currentPage * ORG_GROUP_PAGE_SIZE,
-      );
-
-      const byLeague = new Map();
-      paged.forEach((org) => {
-        const leagueLabel = org.leagueName || "No League";
-        if (!byLeague.has(leagueLabel)) byLeague.set(leagueLabel, []);
-        byLeague.get(leagueLabel).push(org);
-      });
-
-      const leagueMarkup = [...byLeague.entries()]
-        .map(([leagueLabel, leagueItems], leagueIndex) => {
-          const cards = leagueItems
-            .map(
-              (org) => `
+  container.innerHTML = [...byLeague.entries()]
+    .sort(([, first], [, second]) => first.label.localeCompare(second.label))
+    .map(([leagueKey, group]) => {
+      const cards = group.organizations
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+        .map(
+          (org) => `
               <article class="nf-item-card org-item-card">
                 <div class="nf-item-card-top">
                   <h4>${org.name || "Unnamed Organization"}</h4>
@@ -265,48 +231,22 @@ function renderOrganizationsGrouped(orgs) {
                 </div>
               </article>
             `,
-            )
-            .join("");
-
-          return `
-            <details class="nf-subgroup" ${leagueIndex === 0 ? "open" : ""}>
-              <summary>
-                <span>${leagueLabel}</span>
-                <span class="nf-group-count">${leagueItems.length}</span>
-              </summary>
-              <div class="nf-card-grid">${cards}</div>
-            </details>
-          `;
-        })
+        )
         .join("");
 
       return `
-        <details class="nf-group" ${statusIndex === 0 ? "open" : ""}>
+        <details class="nf-group org-league-group" data-league-id="${leagueKey}">
           <summary>
-            <span>${statusLabel}</span>
-            <span class="nf-group-count">${statusItems.length}</span>
+            <span>${group.label}</span>
+            <span class="nf-group-count">${group.organizations.length}</span>
           </summary>
-          <div class="nf-group-content">
-            ${leagueMarkup}
-            ${
-              statusItems.length > ORG_GROUP_PAGE_SIZE
-                ? `
-              <div class="nf-pagination">
-                <button class="nf-btn nf-btn-secondary org-page-btn" data-status="${statusKey}" data-direction="prev" ${currentPage === 1 ? "disabled" : ""}>Previous</button>
-                <span>Page ${currentPage} of ${totalPages}</span>
-                <button class="nf-btn nf-btn-secondary org-page-btn" data-status="${statusKey}" data-direction="next" ${currentPage === totalPages ? "disabled" : ""}>Next</button>
-              </div>
-            `
-                : ""
-            }
-          </div>
+          <div class="nf-group-content"><div class="nf-card-grid">${cards}</div></div>
         </details>
       `;
     })
     .join("");
 
   wireOrganizationCardActions();
-  wireOrganizationPagination();
 }
 
 function wireOrganizationCardActions() {
@@ -323,21 +263,6 @@ function wireOrganizationCardActions() {
 
   document.querySelectorAll(".org-delete-btn").forEach((btn) => {
     btn.onclick = () => openDeleteOrganization(btn.dataset.id);
-  });
-}
-
-function wireOrganizationPagination() {
-  document.querySelectorAll(".org-page-btn").forEach((btn) => {
-    btn.onclick = () => {
-      const status = btn.dataset.status;
-      const direction = btn.dataset.direction;
-      const current = orgGroupPaginationState[status] || 1;
-
-      orgGroupPaginationState[status] =
-        direction === "prev" ? Math.max(1, current - 1) : current + 1;
-
-      applyOrgFiltersAndSearch();
-    };
   });
 }
 
@@ -404,7 +329,7 @@ AdminPage.init({
 
   api: {
     ...OrgApi,
-    getAll: () => OrgApi.getAll({ activeSeasonOnly: true }),
+    getAll: () => OrgApi.getAll(),
   },
 
   // -------------------------------------------------------
@@ -574,28 +499,24 @@ function wireOrgFilterEvents() {
 
   if (search) {
     search.addEventListener("input", () => {
-      resetOrgGroupPagination();
       applyOrgFiltersAndSearch();
     });
   }
 
   if (league) {
     league.addEventListener("change", () => {
-      resetOrgGroupPagination();
       applyOrgFiltersAndSearch();
     });
   }
 
   if (organizationType) {
     organizationType.addEventListener("change", () => {
-      resetOrgGroupPagination();
       applyOrgFiltersAndSearch();
     });
   }
 
   if (status) {
     status.addEventListener("change", () => {
-      resetOrgGroupPagination();
       applyOrgFiltersAndSearch();
     });
   }

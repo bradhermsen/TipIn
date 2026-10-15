@@ -399,6 +399,29 @@ function getWinonaManagedArenas(organizationId) {
   );
 }
 
+function suggestGoBoundVenueNames(location) {
+  const value = String(location || "").trim();
+  const rinkSuffix = value.match(/^(.*?)\s+((?:(?:East|West|North|South)\s+Rink)|(?:Graham\s+\d+))$/i);
+  return rinkSuffix
+    ? { arenaName: rinkSuffix[1].trim(), rinkName: rinkSuffix[2].trim() }
+    : { arenaName: value, rinkName: "Main" };
+}
+
+function defaultGoBoundVenueChoice(proposal) {
+  if (proposal.homeCount > 0 && proposal.awayCount === 0 && proposal.organizationId && !goBoundPreviewState.facilityCatalogError) {
+    const existingMatch = getWinonaManagedArenas(proposal.organizationId).flatMap((arena) =>
+      (arena.rinks || []).filter((rink) => rink.isActive).map((rink) => ({ arena, rink })),
+    ).find(({ arena, rink }) =>
+      normalizeScheduleName(`${arena.name} ${rink.name}`) === normalizeScheduleName(proposal.location),
+    );
+    if (existingMatch) {
+      return { mode: "managed", arenaId: existingMatch.arena.arenaId, rinkId: existingMatch.rink.rinkId };
+    }
+    return { mode: "new", ...suggestGoBoundVenueNames(proposal.location) };
+  }
+  return { mode: "external", location: proposal.location };
+}
+
 function renderGoBoundVenueSetup(rows) {
   const section = document.getElementById("scheduleVenueSetupSection");
   const list = document.getElementById("scheduleVenueSetupList");
@@ -410,7 +433,7 @@ function renderGoBoundVenueSetup(rows) {
   goBoundPreviewState.venueSetup = proposals;
   proposals.forEach((proposal) => {
     if (!goBoundPreviewState.venueMappings.has(proposal.key)) {
-      goBoundPreviewState.venueMappings.set(proposal.key, { mode: "external", location: proposal.location });
+      goBoundPreviewState.venueMappings.set(proposal.key, defaultGoBoundVenueChoice(proposal));
     }
   });
   if (!proposals.length) {
@@ -424,7 +447,7 @@ function renderGoBoundVenueSetup(rows) {
   section.classList.remove("hidden");
   messages.textContent = goBoundPreviewState.facilityCatalogError
     ? "Managed venue catalog unavailable. Locations can remain external; retry the preview to load managed venues."
-    : "Each CSV location stays intact until you choose how to handle it. Away locations default to external text. For a managed home venue, change its dropdown and confirm the Arena/Rink names.";
+    : "Home-only locations are preselected for managed Arena/Rink setup with editable name suggestions. Confirm or change each choice. Away locations stay external.";
 
   list.innerHTML = proposals.map((proposal, index) => {
     const current = goBoundPreviewState.venueMappings.get(proposal.key) || { mode: "external" };
