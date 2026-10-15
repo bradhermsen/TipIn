@@ -22,6 +22,12 @@ const FacilityApi = {
       body: JSON.stringify(dto),
     });
   },
+  createExternalArena(dto) {
+    return this.request("/arenas/external", {
+      method: "POST",
+      body: JSON.stringify(dto),
+    });
+  },
   updateArena(arenaId, dto) {
     return this.request(`/arenas/${arenaId}`, {
       method: "PUT",

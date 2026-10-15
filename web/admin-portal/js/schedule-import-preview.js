@@ -436,15 +436,17 @@ function renderGoBoundVenueSetup(rows) {
   section.classList.remove("hidden");
   messages.textContent = goBoundPreviewState.facilityCatalogError
     ? "Managed venue catalog unavailable. Locations can remain external; retry the preview to load managed venues."
-    : "Home-only locations are preselected for managed Arena/Rink setup with editable name suggestions. Confirm or change each choice. Away locations stay external.";
+    : "Keep the default to store location text on Games only. Or explicitly add a venue to Arena Manager as external, or create a Winona-managed home venue.";
 
   list.innerHTML = proposals.map((proposal, index) => {
     const current = goBoundPreviewState.venueMappings.get(proposal.key) || { mode: "external" };
     const canCreateManaged = proposal.homeCount > 0 && proposal.awayCount === 0 && proposal.organizationId && !goBoundPreviewState.facilityCatalogError;
-    const managedOptions = getWinonaManagedArenas(proposal.organizationId).flatMap((arena) =>
+    const canCreateExternal = Auth.hasRole(window.ROLES.SuperAdmin) && !goBoundPreviewState.facilityCatalogError;
+    const managedOptions = goBoundPreviewState.facilityCatalog.filter((arena) => arena.isActive).flatMap((arena) =>
       (arena.rinks || []).filter((rink) => rink.isActive).map((rink) => {
         const value = `managed:${arena.arenaId}:${rink.rinkId}`;
-        const label = `${arena.name} / ${rink.name}${arena.city ? ` · ${arena.city}` : ""}`;
+        const associationLabel = (arena.organizations || []).map((organization) => organization.name).filter(Boolean).join(", ") || "External Team Venue";
+        const label = `${arena.name} / ${rink.name} · ${associationLabel}${arena.city ? ` · ${arena.city}` : ""}`;
         return `<option value="${escapeGoBoundPreview(value)}" ${current.mode === "managed" && current.arenaId === arena.arenaId && current.rinkId === rink.rinkId ? "selected" : ""}>Use ${escapeGoBoundPreview(label)}</option>`;
       }),
     ).join("");
@@ -458,10 +460,12 @@ function renderGoBoundVenueSetup(rows) {
       ? `managed:${current.arenaId}:${current.rinkId}`
       : current.mode === "new-rink"
         ? `new-rink:${current.arenaId}`
+        : current.mode === "external-new" ? "external-new"
         : current.mode === "new" ? "new" : "external";
     const isNewPair = selectedAction === "new";
     const isNewRink = selectedAction.startsWith("new-rink:");
-    const detail = current.mode === "new" || current.mode === "new-rink" ? current : {};
+    const isExternalNew = selectedAction === "external-new";
+    const detail = current.mode === "new" || current.mode === "new-rink" || current.mode === "external-new" ? current : {};
     return `
       <article class="schedule-opponent-proposal" data-venue-index="${index}">
         <h4>${escapeGoBoundPreview(proposal.location)}</h4>
@@ -472,10 +476,11 @@ function renderGoBoundVenueSetup(rows) {
             ${managedOptions}
             ${managedArenaOptions}
             ${canCreateManaged ? `<option value="new" ${selectedAction === "new" ? "selected" : ""}>Create Winona managed Arena and Rink</option>` : ""}
+            ${canCreateExternal ? `<option value="external-new" ${selectedAction === "external-new" ? "selected" : ""}>Add Arena and Rink to Arena Manager as External Team Venue</option>` : ""}
           </select>
         </label>
-        <div class="schedule-opponent-fields" data-new-venue-fields ${isNewPair || isNewRink ? "" : "hidden"}>
-          <label class="schedule-import-file-label" data-new-arena-wrap ${isNewPair ? "" : "hidden"}>Confirmed Arena name
+        <div class="schedule-opponent-fields" data-new-venue-fields ${isNewPair || isNewRink || isExternalNew ? "" : "hidden"}>
+          <label class="schedule-import-file-label" data-new-arena-wrap ${isNewPair || isExternalNew ? "" : "hidden"}>Arena name
             <input class="nf-input" type="text" maxlength="200" data-venue-arena-name value="${escapeGoBoundPreview(detail.arenaName || "")}" />
           </label>
           <label class="schedule-import-file-label">Confirmed Rink name
@@ -492,9 +497,10 @@ function renderGoBoundVenueSetup(rows) {
       const card = select.closest("[data-venue-index]");
       const isNewPair = select.value === "new";
       const isNewRink = select.value.startsWith("new-rink:");
-      card.querySelector("[data-new-venue-fields]").hidden = !isNewPair && !isNewRink;
-      card.querySelector("[data-new-arena-wrap]").hidden = !isNewPair;
-      if (isNewPair || isNewRink) {
+      const isExternalNew = select.value === "external-new";
+      card.querySelector("[data-new-venue-fields]").hidden = !isNewPair && !isNewRink && !isExternalNew;
+      card.querySelector("[data-new-arena-wrap]").hidden = !isNewPair && !isExternalNew;
+      if (isNewPair || isNewRink || isExternalNew) {
         const suggestions = suggestGoBoundVenueNames(
           goBoundPreviewState.venueSetup[Number(card.dataset.venueIndex)]?.location,
         );
@@ -540,6 +546,13 @@ function saveGoBoundVenueChoice(card, action) {
     });
     return;
   }
+  if (action === "external-new") {
+    goBoundPreviewState.venueMappings.set(proposal.key, {
+      mode: "external-new",
+      ...suggestGoBoundVenueNames(proposal.location),
+    });
+    return;
+  }
   if (action.startsWith("managed:")) {
     const [, arenaId, rinkId] = action.split(":");
     goBoundPreviewState.venueMappings.set(proposal.key, { mode: "managed", arenaId, rinkId });
@@ -555,25 +568,30 @@ function updateReviewedManagedVenueButton() {
   if (!button || !list || !messages) return;
   const newCards = [...list.querySelectorAll("[data-venue-index]")].filter((card) => {
     const action = card.querySelector("[data-venue-action]")?.value || "";
-    return action === "new" || action.startsWith("new-rink:");
+    return action === "new" || action.startsWith("new-rink:") || action === "external-new";
   });
-  const canManageFacilities = Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner);
+  const requiresSuperAdmin = newCards.some((card) => card.querySelector("[data-venue-action]")?.value === "external-new");
+  const canManageFacilities = requiresSuperAdmin
+    ? Auth.hasRole(window.ROLES.SuperAdmin)
+    : Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner);
   const hasIncompleteNames = newCards.some((card) =>
-    (card.querySelector("[data-venue-action]")?.value === "new" &&
+    (["new", "external-new"].includes(card.querySelector("[data-venue-action]")?.value) &&
       !card.querySelector("[data-venue-arena-name]")?.value.trim()) ||
     !card.querySelector("[data-venue-rink-name]")?.value.trim(),
   );
   button.disabled = !canManageFacilities || !newCards.length || hasIncompleteNames;
   if (!canManageFacilities) {
-    messages.textContent = "Your account needs SuperAdmin, OrgAdmin, or OrgOwner access to create managed venues.";
+    messages.textContent = requiresSuperAdmin
+      ? "Only a SuperAdmin can add unassociated External Team Venues to Arena Manager."
+      : "Your account needs SuperAdmin, OrgAdmin, or OrgOwner access to create managed venues.";
   } else if (goBoundPreviewState.facilityCatalogError) {
     messages.textContent = "The managed venue catalog failed to load. Reload the CSV preview before creating venues.";
   } else if (!newCards.length) {
-    messages.textContent = "All locations are currently external or mapped to existing venues. Select Create or Add a Rink only for locations you want to add to Winona.";
+    messages.textContent = "No Arena Manager changes selected. Keep locations as game text, choose an existing Arena/Rink, or explicitly add a venue to the catalog.";
   } else if (hasIncompleteNames) {
     messages.textContent = "Enter both the Arena and Rink names for every selected venue.";
   } else {
-    messages.textContent = `${newCards.length} managed venue${newCards.length === 1 ? "" : "s"} ready to create. This does not import Games.`;
+    messages.textContent = `${newCards.length} venue${newCards.length === 1 ? "" : "s"} ready to add to Arena Manager. This does not import Games.`;
   }
 }
 
@@ -582,15 +600,12 @@ function updateReviewedManagedVenueButton() {
     const messages = document.getElementById("scheduleVenueSetupMessages");
     const list = document.getElementById("scheduleVenueSetupList");
     if (!button || !messages || !list) return;
-    if (!Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner)) {
-      messages.textContent = "A facility administrator must create Winona-managed venues.";
-      return;
-    }
-
     const cards = [...list.querySelectorAll("[data-venue-index]")];
     cards.forEach((card) => {
-      const select = card.querySelector("[data-venue-action]");
-      if (select?.value === "new" || select?.value.startsWith("new-rink:")) saveGoBoundVenueChoice(card, select.value);
+      const action = card.querySelector("[data-venue-action]")?.value || "";
+      if (action === "new" || action.startsWith("new-rink:") || action === "external-new") {
+        saveGoBoundVenueChoice(card, action);
+      }
     });
     const newSelections = cards.map((card) => ({
       card,
@@ -598,21 +613,31 @@ function updateReviewedManagedVenueButton() {
       action: card.querySelector("[data-venue-action]")?.value || "",
       arenaName: card.querySelector("[data-venue-arena-name]")?.value.trim() || "",
       rinkName: card.querySelector("[data-venue-rink-name]")?.value.trim() || "",
-    })).filter((item) => item.action === "new" || item.action.startsWith("new-rink:"));
+    })).filter((item) => item.action === "new" || item.action.startsWith("new-rink:") || item.action === "external-new");
+    const includesExternalVenues = newSelections.some((item) => item.action === "external-new");
+    if (includesExternalVenues && !Auth.hasRole(window.ROLES.SuperAdmin)) {
+      messages.textContent = "Only a SuperAdmin can add unassociated External Team Venues to Arena Manager.";
+      return;
+    }
+    if (!includesExternalVenues && !Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner)) {
+      messages.textContent = "A facility administrator must create Winona-managed venues.";
+      return;
+    }
     if (!newSelections.length) {
-      messages.textContent = "No new managed venues are selected. Existing and external venue choices are ready for a later Game import.";
+      messages.textContent = "No Arena Manager changes are selected. Existing and external-text choices are ready for Game import.";
       return;
     }
 
     const invalid = newSelections.find((item) =>
-      !item.proposal || !item.proposal.organizationId || item.proposal.homeCount < 1 ||
-      item.proposal.awayCount > 0 || !item.rinkName ||
-      (item.action === "new" && !item.arenaName) ||
-      (item.action.startsWith("new-rink:") && !getWinonaManagedArenas(item.proposal.organizationId)
-        .some((arena) => String(arena.arenaId) === item.action.split(":")[1])),
+        !item.proposal || !item.rinkName ||
+        (item.action === "external-new" && (!item.arenaName || !includesExternalVenues)) ||
+        (item.action !== "external-new" && (!item.proposal.organizationId || item.proposal.homeCount < 1 || item.proposal.awayCount > 0)) ||
+        ((item.action === "new" || item.action === "external-new") && !item.arenaName) ||
+        (item.action.startsWith("new-rink:") && !getWinonaManagedArenas(item.proposal.organizationId)
+          .some((arena) => String(arena.arenaId) === item.action.split(":")[1])),
     );
     if (invalid) {
-      messages.textContent = "Only home-only locations with confirmed venue names and a valid Winona Arena can be created as managed venues.";
+        messages.textContent = "Confirm Arena and Rink names. Winona-managed venues must be home-only; External Team Venues can be added for any location.";
       return;
     }
     if (goBoundPreviewState.facilityCatalogError) {
@@ -620,12 +645,14 @@ function updateReviewedManagedVenueButton() {
       return;
     }
 
-    const pairCount = newSelections.filter((item) => item.action === "new").length;
+    const managedPairCount = newSelections.filter((item) => item.action === "new").length;
+    const externalPairCount = newSelections.filter((item) => item.action === "external-new").length;
     const rinkCount = newSelections.length;
-    if (!window.confirm(`Create ${pairCount} new Arena${pairCount === 1 ? "" : "s"} and ${rinkCount} Rink${rinkCount === 1 ? "" : "s"} under Winona? No Games will be imported.`)) return;
+    if (!window.confirm(`Add ${managedPairCount} Winona-managed Arena${managedPairCount === 1 ? "" : "s"} and ${externalPairCount} External Team Venue${externalPairCount === 1 ? "" : "s"}, with ${rinkCount} Rink${rinkCount === 1 ? "" : "s"}, to Arena Manager? Games will not be imported.`)) return;
     button.disabled = true;
     messages.textContent = "Creating the reviewed managed venues...";
     let createdArenaCount = 0;
+    let createdExternalArenaCount = 0;
     let createdRinkCount = 0;
     let reusedVenueCount = 0;
     let failedMessage = "";
@@ -633,7 +660,30 @@ function updateReviewedManagedVenueButton() {
     try {
       for (const item of newSelections) {
         let arena;
-        if (item.action.startsWith("new-rink:")) {
+        if (item.action === "external-new") {
+          const matchingExternalArenas = goBoundPreviewState.facilityCatalog.filter((candidate) =>
+            candidate.isActive && !(candidate.organizations || []).length &&
+            normalizeScheduleName(candidate.name) === normalizeScheduleName(item.arenaName),
+          );
+          if (matchingExternalArenas.length > 1) throw new Error(`More than one External Team Venue is named ${item.arenaName}; select an existing Arena/Rink instead.`);
+          arena = matchingExternalArenas[0];
+          if (!arena) {
+            const result = await FacilityApi.createExternalArena({
+              name: item.arenaName,
+              streetAddress: null,
+              city: null,
+              state: null,
+              postalCode: null,
+              isActive: true,
+            });
+            if (!result?.arenaId) throw new Error(`External Arena ${item.arenaName} was created without a returned ID.`);
+            const refreshedCatalog = await FacilityApi.getCatalog();
+            arena = refreshedCatalog.find((candidate) => String(candidate.arenaId) === String(result.arenaId));
+            if (!arena) throw new Error(`External Arena ${item.arenaName} was created but could not be reloaded.`);
+            goBoundPreviewState.facilityCatalog = refreshedCatalog;
+            createdExternalArenaCount += result.created === false ? 0 : 1;
+          }
+        } else if (item.action.startsWith("new-rink:")) {
           arena = getWinonaManagedArenas(item.proposal.organizationId).find((candidate) =>
             String(candidate.arenaId) === item.action.split(":")[1],
           );
@@ -694,7 +744,7 @@ function updateReviewedManagedVenueButton() {
           rinkId: rink.rinkId,
         });
       }
-      failedMessage = `Venue setup complete: ${createdArenaCount} Arenas and ${createdRinkCount} Rinks created; ${reusedVenueCount} existing Rinks reused. No Games were imported.`;
+      failedMessage = `Arena Manager update complete: ${createdArenaCount} Winona Arenas and ${createdExternalArenaCount} External Team Venues created; ${createdRinkCount} Rinks created and ${reusedVenueCount} existing Rinks reused. No Games were imported.`;
     } catch (error) {
       failedMessage = `Venue setup stopped: ${error.message || "Unknown error"}. Completed facilities are retained; retrying will reuse matching Arenas and Rinks.`;
     }
@@ -1185,7 +1235,7 @@ function buildGoBoundGameImportPlan() {
     if (!homeTeamId || !awayTeamId || homeTeamId === awayTeamId) rowProblem = "Team mapping is incomplete.";
     else if (!date || !time) rowProblem = "Date or time format is not recognized.";
     else if (!gameType || !Number.isInteger(Number(gameType.gameTypeId))) rowProblem = "Game Type is unavailable.";
-    else if (venue.mode === "new" || venue.mode === "new-rink") rowProblem = "Finish or change the managed venue selection before importing Games.";
+    else if (venue.mode === "new" || venue.mode === "new-rink" || venue.mode === "external-new") rowProblem = "Create the selected Arena/Rink in Arena Manager before importing Games.";
     else if (venue.mode === "managed" && (!venue.arenaId || !venue.rinkId)) rowProblem = "Managed Arena/Rink selection is incomplete.";
     if (rowProblem) {
       problems.push(`Row ${index + 1}: ${rowProblem}`);

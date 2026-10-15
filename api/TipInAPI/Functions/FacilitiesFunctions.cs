@@ -152,6 +152,69 @@ namespace TipInAPI.Functions
             return response;
         }
 
+        [Function("CreateExternalArena")]
+        public async Task<HttpResponseData> CreateExternalArena(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "arenas/external")] HttpRequestData req)
+        {
+            var context = await AuthorizeAsync(req, requireAdmin: true);
+            if (context.Error != null) return context.Error;
+            if (!context.IsSuperAdmin)
+                return await AuthorizationHelper.ForbiddenResponse(req, "Only SuperAdmin can create an unassociated External Team Venue.");
+
+            var dto = await req.ReadFromJsonAsync<ArenaCreateUpdateDto>();
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Name))
+                return await BadRequestAsync(req, "Arena name is required.");
+
+            var name = dto.Name.Trim();
+            using var connection = _connectionFactory.CreateConnection();
+            var existingArenaId = await connection.QueryFirstOrDefaultAsync<Guid?>(@"
+                SELECT TOP (1) a.ArenaId
+                FROM dbo.Arenas a
+                WHERE a.IsActive = 1
+                  AND LOWER(LTRIM(RTRIM(a.Name))) = LOWER(@Name)
+                  AND NOT EXISTS
+                  (
+                      SELECT 1
+                      FROM dbo.ArenaOrganizations ao
+                      WHERE ao.ArenaId = a.ArenaId
+                  )
+                ORDER BY a.CreatedAt DESC;",
+                new { Name = name });
+            if (existingArenaId.HasValue)
+            {
+                var existingResponse = req.CreateResponse(HttpStatusCode.OK);
+                await existingResponse.WriteAsJsonAsync(new { arenaId = existingArenaId.Value, created = false });
+                return existingResponse;
+            }
+
+            var arenaId = Guid.NewGuid();
+            await connection.ExecuteAsync(@"
+                INSERT INTO dbo.Arenas
+                (
+                    ArenaId, Name, StreetAddress, City, State, PostalCode,
+                    IsActive, CreatedAt, UpdatedAt
+                )
+                VALUES
+                (
+                    @ArenaId, @Name, @StreetAddress, @City, @State, @PostalCode,
+                    @IsActive, SYSUTCDATETIME(), SYSUTCDATETIME()
+                );",
+                new
+                {
+                    ArenaId = arenaId,
+                    Name = name,
+                    dto.StreetAddress,
+                    dto.City,
+                    dto.State,
+                    dto.PostalCode,
+                    dto.IsActive
+                });
+
+            var response = req.CreateResponse(HttpStatusCode.Created);
+            await response.WriteAsJsonAsync(new { arenaId, created = true });
+            return response;
+        }
+
         [Function("AssociateOrganizationArena")]
         public async Task<HttpResponseData> AssociateOrganizationArena(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "organizations/{organizationId:guid}/arenas/{arenaId:guid}/associate")] HttpRequestData req,
