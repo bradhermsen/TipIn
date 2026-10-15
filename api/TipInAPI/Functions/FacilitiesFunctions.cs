@@ -172,16 +172,29 @@ namespace TipInAPI.Functions
                 FROM dbo.Arenas a
                 WHERE a.IsActive = 1
                   AND LOWER(LTRIM(RTRIM(a.Name))) = LOWER(@Name)
-                  AND NOT EXISTS
-                  (
-                      SELECT 1
-                      FROM dbo.ArenaOrganizations ao
-                      WHERE ao.ArenaId = a.ArenaId
-                  )
                 ORDER BY a.CreatedAt DESC;",
                 new { Name = name });
             if (existingArenaId.HasValue)
             {
+                var isUnassociated = await connection.ExecuteScalarAsync<bool>(@"
+                    SELECT CAST(CASE WHEN NOT EXISTS
+                    (
+                        SELECT 1
+                        FROM dbo.ArenaOrganizations
+                        WHERE ArenaId = @ArenaId
+                    ) THEN 1 ELSE 0 END AS bit);",
+                    new { ArenaId = existingArenaId.Value });
+                if (!isUnassociated)
+                {
+                    var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                    await conflict.WriteAsJsonAsync(new
+                    {
+                        error = "An active Arena with this name already exists in Arena Manager. Choose its existing Arena/Rink or keep this location as Game venue text.",
+                        existingArenaId = existingArenaId.Value
+                    });
+                    return conflict;
+                }
+
                 var existingResponse = req.CreateResponse(HttpStatusCode.OK);
                 await existingResponse.WriteAsJsonAsync(new { arenaId = existingArenaId.Value, created = false });
                 return existingResponse;
