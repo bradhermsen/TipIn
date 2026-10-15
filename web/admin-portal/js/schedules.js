@@ -1175,7 +1175,7 @@ function renderGamesGrouped(list) {
               return `
                 <article class="schedule-game-card">
                   <div class="schedule-game-top">
-                    <h4>${homeLabel} vs ${awayLabel}</h4>
+                    <h4>${awayLabel} vs ${homeLabel}</h4>
                     <span class="schedule-status-badge">${statusLabel || statusKey}</span>
                   </div>
 
