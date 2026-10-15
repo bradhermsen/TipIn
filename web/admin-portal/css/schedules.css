@@ -107,6 +107,10 @@
   gap: 10px;
 }
 
+#scheduleImportPreview [hidden] {
+  display: none !important;
+}
+
 .schedule-opponent-teams {
   margin-top: 10px;
   color: var(--nf-text-muted);

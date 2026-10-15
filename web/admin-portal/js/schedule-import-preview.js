@@ -12,6 +12,7 @@ const goBoundPreviewState = {
   opponentSetup: [],
   venueSetup: [],
   venueMappings: new Map(),
+  gamesImported: false,
 };
 
 function splitGoBoundCsvLine(line) {
@@ -416,13 +417,14 @@ function renderGoBoundVenueSetup(rows) {
     section.classList.add("hidden");
     list.replaceChildren();
     button.disabled = true;
+    updateGoBoundGameImportButton();
     return;
   }
 
   section.classList.remove("hidden");
   messages.textContent = goBoundPreviewState.facilityCatalogError
     ? "Managed venue catalog unavailable. Locations can remain external; retry the preview to load managed venues."
-    : "Each CSV location stays intact until you choose how to handle it. Away locations default to external text. Only home-only locations can be added as Winona-managed Arenas/Rinks.";
+    : "Each CSV location stays intact until you choose how to handle it. Away locations default to external text. For a managed home venue, change its dropdown and confirm the Arena/Rink names.";
 
   list.innerHTML = proposals.map((proposal, index) => {
     const current = goBoundPreviewState.venueMappings.get(proposal.key) || { mode: "external" };
@@ -482,6 +484,7 @@ function renderGoBoundVenueSetup(rows) {
       card.querySelector("[data-new-arena-wrap]").hidden = !isNewPair;
       saveGoBoundVenueChoice(card, select.value);
       updateReviewedManagedVenueButton();
+      updateGoBoundGameImportButton();
     });
   });
   list.querySelectorAll("[data-venue-arena-name], [data-venue-rink-name]").forEach((input) => {
@@ -489,10 +492,12 @@ function renderGoBoundVenueSetup(rows) {
       const card = input.closest("[data-venue-index]");
       saveGoBoundVenueChoice(card, card.querySelector("[data-venue-action]")?.value || "external");
       updateReviewedManagedVenueButton();
+      updateGoBoundGameImportButton();
     });
   });
   button.disabled = true;
   updateReviewedManagedVenueButton();
+  updateGoBoundGameImportButton();
 }
 
 function saveGoBoundVenueChoice(card, action) {
@@ -799,6 +804,7 @@ function renderGoBoundPreview(rows, fileRowCount, skippedScrimmages, duplicates)
 
   if (!rows.length) {
     body.innerHTML = '<tr><td colspan="11">No eligible non-scrimmage game rows found.</td></tr>';
+    updateGoBoundGameImportButton();
     return;
   }
 
@@ -817,15 +823,20 @@ function renderGoBoundPreview(rows, fileRowCount, skippedScrimmages, duplicates)
       <td class="${row.ready ? "schedule-import-status-ready" : "schedule-import-status-review"}">${escapeGoBoundPreview(row.ready ? "Ready for review" : row.problems.join("; "))}</td>
     </tr>
   `).join("");
+  updateGoBoundGameImportButton();
 }
 
 async function previewGoBoundCsv(file) {
   const sameFile = goBoundPreviewState.previewFile === file;
-  if (!sameFile) goBoundPreviewState.venueMappings = new Map();
+  if (!sameFile) {
+    goBoundPreviewState.venueMappings = new Map();
+    goBoundPreviewState.gamesImported = false;
+  }
   goBoundPreviewState.previewFile = file;
   goBoundPreviewState.previewRows = [];
   goBoundPreviewState.opponentSetup = [];
   goBoundPreviewState.venueSetup = [];
+  updateGoBoundGameImportButton();
   renderExternalOpponentSetup([]);
   renderGoBoundVenueSetup([]);
   const messages = document.getElementById("scheduleImportMessages");
@@ -1071,6 +1082,196 @@ async function goBoundResponseError(response, fallback) {
   }
 }
 
+function goBoundDateValue(value) {
+  const text = String(value || "").trim();
+  let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  let year;
+  let month;
+  let day;
+  if (match) {
+    [, year, month, day] = match;
+  } else {
+    match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (!match) return "";
+    [, month, day, year] = match;
+  }
+  const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (parsed.getUTCFullYear() !== Number(year) || parsed.getUTCMonth() + 1 !== Number(month) || parsed.getUTCDate() !== Number(day)) return "";
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function goBoundTimeValue(value) {
+  const text = String(value || "").trim();
+  let match = text.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  let hour;
+  let minute;
+  if (match) {
+    hour = Number(match[1]);
+    minute = Number(match[2]);
+    if (hour < 1 || hour > 12 || minute > 59) return "";
+    hour = (hour % 12) + (match[3].toUpperCase() === "PM" ? 12 : 0);
+  } else {
+    match = text.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return "";
+    hour = Number(match[1]);
+    minute = Number(match[2]);
+    if (hour > 23 || minute > 59) return "";
+  }
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function goBoundGameDateTimeKey(value) {
+  const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})/);
+  if (match) return match[1];
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}T${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
+}
+
+function buildGoBoundGameImportPlan() {
+  const entries = [];
+  const problems = [];
+  const seen = new Set();
+  goBoundPreviewState.previewRows.forEach((row, index) => {
+    if (!row.ready) {
+      problems.push(`Row ${index + 1}: ${row.problems.join("; ")}`);
+      return;
+    }
+
+    const opponentTeamId = row.opponentMappingDetails?.teamId;
+    const homeTeamId = row.homeAway === "Home" ? row.winonaTeamId : opponentTeamId;
+    const awayTeamId = row.homeAway === "Home" ? opponentTeamId : row.winonaTeamId;
+    const date = goBoundDateValue(row.date);
+    const time = goBoundTimeValue(row.time);
+    const gameType = goBoundPreviewState.gameTypes.find((item) =>
+      normalizeScheduleName(item.name) === normalizeScheduleName(row.gameType),
+    );
+    const venue = goBoundPreviewState.venueMappings.get(getGoBoundVenueKey(row.venue)) || { mode: "external" };
+    let rowProblem = "";
+    if (!homeTeamId || !awayTeamId || homeTeamId === awayTeamId) rowProblem = "Team mapping is incomplete.";
+    else if (!date || !time) rowProblem = "Date or time format is not recognized.";
+    else if (!gameType || !Number.isInteger(Number(gameType.gameTypeId))) rowProblem = "Game Type is unavailable.";
+    else if (venue.mode === "new" || venue.mode === "new-rink") rowProblem = "Finish or change the managed venue selection before importing Games.";
+    else if (venue.mode === "managed" && (!venue.arenaId || !venue.rinkId)) rowProblem = "Managed Arena/Rink selection is incomplete.";
+    if (rowProblem) {
+      problems.push(`Row ${index + 1}: ${rowProblem}`);
+      return;
+    }
+
+    const gameDateTime = `${date}T${time}:00`;
+    const key = `${homeTeamId}|${awayTeamId}|${gameDateTime.slice(0, 16)}`;
+    if (seen.has(key)) {
+      problems.push(`Row ${index + 1}: This Team pairing and game time appears more than once in the CSV.`);
+      return;
+    }
+    seen.add(key);
+    entries.push({
+      row,
+      key,
+      payload: {
+        homeTeamId,
+        awayTeamId,
+        gameDateTime,
+        arenaId: venue.mode === "managed" ? venue.arenaId : null,
+        rinkId: venue.mode === "managed" ? venue.rinkId : null,
+        arenaName: venue.mode === "managed" ? "" : row.venue,
+        rinkName: "",
+        venueAddress: null,
+        gameTypeId: Number(gameType.gameTypeId),
+        gameRoundId: null,
+        periodLengthMinutes: null,
+        referee1OfficialId: null,
+        referee2OfficialId: null,
+        linesman1OfficialId: null,
+        linesman2OfficialId: null,
+        notes: null,
+        status: "Scheduled",
+      },
+    });
+  });
+  return { entries, problems };
+}
+
+function updateGoBoundGameImportButton() {
+  const button = document.getElementById("importReviewedGoBoundGames");
+  const messages = document.getElementById("scheduleGameImportMessages");
+  if (!button || !messages) return;
+  const plan = buildGoBoundGameImportPlan();
+  const canImport = Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner);
+  button.disabled = !canImport || !plan.entries.length || plan.problems.length > 0 || goBoundPreviewState.gamesImported;
+  if (!canImport) messages.textContent = "A SuperAdmin, OrgAdmin, or OrgOwner is required to import Games.";
+  else if (plan.problems.length) messages.textContent = `Resolve ${plan.problems.length} schedule or venue issue${plan.problems.length === 1 ? "" : "s"} before importing Games.`;
+  else if (goBoundPreviewState.gamesImported) messages.textContent = "This CSV import completed. Matching Games will be skipped if you reload and retry.";
+  else if (plan.entries.length) messages.textContent = `${plan.entries.length} reviewed Games are ready. Existing matching Games will be skipped.`;
+  else messages.textContent = "Preview a GoBound CSV to prepare Games for import.";
+}
+
+async function importReviewedGoBoundGames() {
+  const button = document.getElementById("importReviewedGoBoundGames");
+  const messages = document.getElementById("scheduleGameImportMessages");
+  if (!button || !messages) return;
+  const plan = buildGoBoundGameImportPlan();
+  if (!Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner)) {
+    messages.textContent = "A SuperAdmin, OrgAdmin, or OrgOwner is required to import Games.";
+    return;
+  }
+  if (!plan.entries.length || plan.problems.length) {
+    updateGoBoundGameImportButton();
+    return;
+  }
+
+  button.disabled = true;
+  messages.textContent = "Checking for Games already in this Season...";
+  let existingGames;
+  try {
+    const response = await authFetch("/games", { cache: "no-store" });
+    if (!response.ok) throw new Error(await goBoundResponseError(response, "Could not check existing Games."));
+    existingGames = await response.json();
+    if (!Array.isArray(existingGames)) throw new Error("The Games endpoint returned an invalid list.");
+  } catch (error) {
+    messages.textContent = `Import stopped before creating Games: ${error.message || "Could not load existing Games."}`;
+    updateGoBoundGameImportButton();
+    return;
+  }
+
+  const activeTeamIds = new Set(goBoundPreviewState.teams.map((team) => String(team.teamId || team.id || "")));
+  const existingKeys = new Set(existingGames.filter((game) =>
+    activeTeamIds.has(String(game.homeTeamId)) || activeTeamIds.has(String(game.awayTeamId)),
+  ).map((game) => {
+    const dateTime = goBoundGameDateTimeKey(game.gameDateTime);
+    return dateTime ? `${game.homeTeamId}|${game.awayTeamId}|${dateTime}` : "";
+  }));
+  const toCreate = plan.entries.filter((entry) => !existingKeys.has(entry.key));
+  const skippedCount = plan.entries.length - toCreate.length;
+  if (!window.confirm(`Import ${toCreate.length} Games and skip ${skippedCount} matching Games already present? This creates Games only; it will not create or change Organizations, Teams, or venues.`)) {
+    updateGoBoundGameImportButton();
+    return;
+  }
+
+  let createdCount = 0;
+  let resultMessage = "";
+  try {
+    for (const entry of toCreate) {
+      const response = await authFetch("/games", {
+        method: "POST",
+        body: JSON.stringify(entry.payload),
+      });
+      if (!response.ok) {
+        const detail = await goBoundResponseError(response, `Could not create ${entry.row.sourceEvent}.`);
+        throw new Error(`Stopped after ${createdCount} Games: ${detail}`);
+      }
+      createdCount++;
+    }
+    goBoundPreviewState.gamesImported = true;
+    if (typeof loadGames === "function") await loadGames();
+    resultMessage = `Schedule import complete: ${createdCount} Games created and ${skippedCount} matching Games skipped.`;
+  } catch (error) {
+    resultMessage = `${error.message || "Game import failed."} Retry is safe; matching Games will be skipped.`;
+  }
+  updateGoBoundGameImportButton();
+  messages.textContent = resultMessage;
+}
+
 function summaryMessage(message) {
   const summary = document.getElementById("scheduleImportSummary");
   if (summary) summary.textContent = "";
@@ -1088,6 +1289,7 @@ function initScheduleImportPreview() {
   const fileInput = document.getElementById("scheduleImportCsvFile");
   const createButton = document.getElementById("createReviewedExternalRecords");
   const createVenueButton = document.getElementById("createReviewedManagedVenues");
+  const importGamesButton = document.getElementById("importReviewedGoBoundGames");
   openButton?.addEventListener("click", () => {
     panel.classList.remove("hidden");
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1100,6 +1302,7 @@ function initScheduleImportPreview() {
   });
   createButton?.addEventListener("click", createReviewedExternalRecords);
   createVenueButton?.addEventListener("click", createReviewedManagedVenues);
+  importGamesButton?.addEventListener("click", importReviewedGoBoundGames);
 }
 
 document.addEventListener("layoutLoaded", initScheduleImportPreview);
