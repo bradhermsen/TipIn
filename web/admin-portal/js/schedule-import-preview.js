@@ -78,9 +78,9 @@ function normalizeScheduleName(value) {
 function goBoundOpponent(eventName) {
   const event = String(eventName || "").trim();
   let match = event.match(/^Winona\s+vs\s+(.+)$/i);
-  if (match) return { opponent: match[1].trim(), winonaIsHome: true };
-  match = event.match(/^(.+?)\s+vs\s+Winona$/i);
   if (match) return { opponent: match[1].trim(), winonaIsHome: false };
+  match = event.match(/^(.+?)\s+vs\s+Winona$/i);
+  if (match) return { opponent: match[1].trim(), winonaIsHome: true };
   return { opponent: "", winonaIsHome: null };
 }
 
