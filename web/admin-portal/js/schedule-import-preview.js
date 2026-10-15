@@ -408,7 +408,7 @@ function suggestGoBoundVenueNames(location) {
 }
 
 function defaultGoBoundVenueChoice(proposal) {
-  return { mode: "external", location: proposal.location };
+  return { mode: "external-new", ...suggestGoBoundVenueNames(proposal.location) };
 }
 
 function renderGoBoundVenueSetup(rows) {
@@ -436,7 +436,7 @@ function renderGoBoundVenueSetup(rows) {
   section.classList.remove("hidden");
   messages.textContent = goBoundPreviewState.facilityCatalogError
     ? "Managed venue catalog unavailable. Locations can remain external; retry the preview to load managed venues."
-    : "Keep the default to store location text on Games only. Or explicitly add a venue to Arena Manager as external, or create a Winona-managed home venue.";
+    : "Locations default to importing into Arena Manager as External Team Venues. Confirm the suggested Arena/Rink names or choose Don't import. No Organization or Game link is created here.";
 
   list.innerHTML = proposals.map((proposal, index) => {
     const current = goBoundPreviewState.venueMappings.get(proposal.key) || { mode: "external" };
@@ -472,11 +472,11 @@ function renderGoBoundVenueSetup(rows) {
         <p class="schedule-opponent-teams">${proposal.games} games · ${proposal.homeCount} home · ${proposal.awayCount} away</p>
         <label class="schedule-import-file-label">Venue handling
           <select class="nf-input" data-venue-action>
-            <option value="external" ${selectedAction === "external" ? "selected" : ""}>Keep as external venue text</option>
+            <option value="external" ${selectedAction === "external" ? "selected" : ""}>Don't import to Arena Manager; keep venue text on Games</option>
             ${managedOptions}
             ${managedArenaOptions}
             ${canCreateManaged ? `<option value="new" ${selectedAction === "new" ? "selected" : ""}>Create Winona managed Arena and Rink</option>` : ""}
-            ${canCreateExternal ? `<option value="external-new" ${selectedAction === "external-new" ? "selected" : ""}>Add Arena and Rink to Arena Manager as External Team Venue</option>` : ""}
+            ${canCreateExternal ? `<option value="external-new" ${selectedAction === "external-new" ? "selected" : ""}>Import to Arena Manager as External Team Venue</option>` : ""}
           </select>
         </label>
         <div class="schedule-opponent-fields" data-new-venue-fields ${isNewPair || isNewRink || isExternalNew ? "" : "hidden"}>
@@ -655,18 +655,34 @@ function updateReviewedManagedVenueButton() {
     let createdExternalArenaCount = 0;
     let createdRinkCount = 0;
     let reusedVenueCount = 0;
+    let skippedExistingVenueCount = 0;
+    const venueWarnings = [];
     let failedMessage = "";
 
     try {
       for (const item of newSelections) {
         let arena;
         if (item.action === "external-new") {
-          const matchingExternalArenas = goBoundPreviewState.facilityCatalog.filter((candidate) =>
-            candidate.isActive && !(candidate.organizations || []).length &&
+          const matchingArenas = goBoundPreviewState.facilityCatalog.filter((candidate) =>
+            candidate.isActive &&
             normalizeScheduleName(candidate.name) === normalizeScheduleName(item.arenaName),
           );
-          if (matchingExternalArenas.length > 1) throw new Error(`More than one External Team Venue is named ${item.arenaName}; select an existing Arena/Rink instead.`);
-          arena = matchingExternalArenas[0];
+          if (matchingArenas.length > 1) {
+            skippedExistingVenueCount++;
+            venueWarnings.push(`${item.arenaName} matches multiple existing Arenas; no duplicate was created.`);
+            goBoundPreviewState.venueMappings.set(item.proposal.key, { mode: "external", location: item.proposal.location });
+            continue;
+          }
+          arena = matchingArenas[0];
+          if (arena?.organizations?.length) {
+            const existingRink = (arena.rinks || []).some((rink) =>
+              rink.isActive && normalizeScheduleName(rink.name) === normalizeScheduleName(item.rinkName),
+            );
+            skippedExistingVenueCount++;
+            if (!existingRink) venueWarnings.push(`${item.arenaName} already exists with an Organization but not the selected Rink; no duplicate or association was created.`);
+            goBoundPreviewState.venueMappings.set(item.proposal.key, { mode: "external", location: item.proposal.location });
+            continue;
+          }
           if (!arena) {
             const result = await FacilityApi.createExternalArena({
               name: item.arenaName,
@@ -738,13 +754,11 @@ function updateReviewedManagedVenueButton() {
           reusedVenueCount++;
         }
 
-        goBoundPreviewState.venueMappings.set(item.proposal.key, {
-          mode: "managed",
-          arenaId: arena.arenaId,
-          rinkId: rink.rinkId,
-        });
+        goBoundPreviewState.venueMappings.set(item.proposal.key, item.action === "external-new"
+          ? { mode: "external", location: item.proposal.location }
+          : { mode: "managed", arenaId: arena.arenaId, rinkId: rink.rinkId });
       }
-      failedMessage = `Arena Manager update complete: ${createdArenaCount} Winona Arenas and ${createdExternalArenaCount} External Team Venues created; ${createdRinkCount} Rinks created and ${reusedVenueCount} existing Rinks reused. No Games were imported.`;
+      failedMessage = `Arena Manager update complete: ${createdArenaCount} Winona Arenas and ${createdExternalArenaCount} External Team Venues created; ${createdRinkCount} Rinks created, ${reusedVenueCount} Rinks reused, and ${skippedExistingVenueCount} existing venues skipped. No Games were imported.${venueWarnings.length ? ` ${venueWarnings.join(" ")}` : ""}`;
     } catch (error) {
       failedMessage = `Venue setup stopped: ${error.message || "Unknown error"}. Completed facilities are retained; retrying will reuse matching Arenas and Rinks.`;
     }
