@@ -1745,32 +1745,16 @@ window.PageContentRegistry.schedulesModals = () => `
 
           <div class="two-col">
             <div>
-              <label>Organization</label>
-              <select id="game-organization" class="nf-input"></select>
-            </div>
-
-            <div>
-              <label>Organization Team Is</label>
-              <select id="game-organization-team-side" class="nf-input">
-                <option value="home">Home Team</option>
-                <option value="away">Away Team</option>
-              </select>
-            </div>
-
-            <div>
-              <label>Opponent Organization</label>
-              <select id="game-opponent-organization" class="nf-input"></select>
-            </div>
-          </div>
-
-          <div class="two-col">
-            <div>
-              <label>Home Team</label>
+              <label for="game-home-organization">Home Organization</label>
+              <select id="game-home-organization" class="nf-input"></select>
+              <label for="game-home-team">Home Team</label>
               <select id="game-home-team" class="nf-input"></select>
             </div>
 
             <div>
-              <label>Away Team</label>
+              <label for="game-away-organization">Away Organization</label>
+              <select id="game-away-organization" class="nf-input"></select>
+              <label for="game-away-team">Away Team</label>
               <select id="game-away-team" class="nf-input"></select>
             </div>
           </div>

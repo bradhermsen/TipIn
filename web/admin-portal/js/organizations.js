@@ -40,14 +40,14 @@ async function loadOrganizationFacilities(organizationId) {
   }
 }
 
-function getFilteredOrganizations() {
-  const source = Array.isArray(AdminPage?.allItems) ? AdminPage.allItems : [];
+function getFilteredOrganizations(organizations = AdminPage?.allItems) {
+  const source = Array.isArray(organizations) ? organizations : [];
   const searchTerm = (
     document.getElementById("org-search-bar")?.value || ""
   ).toLowerCase();
   const leagueFilter = document.getElementById("filter-league")?.value || "";
   const typeFilter =
-    document.getElementById("filter-organization-type")?.value || "";
+    (document.getElementById("filter-organization-type")?.value || "").trim().toLowerCase();
   const statusFilter = document.getElementById("filter-status")?.value || "";
 
   return source.filter((org) => {
@@ -57,7 +57,8 @@ function getFilteredOrganizations() {
 
     const matchesSearch = !searchTerm || orgText.includes(searchTerm);
     const matchesLeague = !leagueFilter || orgLeague === leagueFilter;
-    const matchesType = !typeFilter || org.organizationType === typeFilter;
+    const organizationType = (org.organizationType || "Managed").trim().toLowerCase();
+    const matchesType = !typeFilter || organizationType === typeFilter;
     const matchesStatus = !statusFilter || orgStatus === statusFilter;
 
     return matchesSearch && matchesLeague && matchesType && matchesStatus;
@@ -345,7 +346,7 @@ AdminPage.init({
   // TABLE RENDERING (MODERNIZED)
   // -------------------------------------------------------
   renderTable: (orgs) => {
-    renderOrganizationsGrouped(orgs);
+    renderOrganizationsGrouped(getFilteredOrganizations(orgs));
   },
 
   // -------------------------------------------------------
