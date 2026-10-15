@@ -13,6 +13,8 @@ const goBoundPreviewState = {
   venueSetup: [],
   venueMappings: new Map(),
   gamesImported: false,
+  excludedTeams: new Set(),
+  previewCounts: { fileRowCount: 0, skippedScrimmages: 0, duplicates: 0 },
 };
 
 function splitGoBoundCsvLine(line) {
@@ -317,6 +319,18 @@ function escapeGoBoundPreview(value) {
   })[character]);
 }
 
+function goBoundTeamImportKey(opponent, teamType, levelName) {
+  return [opponent, teamType, levelName].map(normalizeScheduleName).join("|");
+}
+
+function isGoBoundTeamIncluded(opponent, teamType, levelName) {
+  return !goBoundPreviewState.excludedTeams.has(goBoundTeamImportKey(opponent, teamType, levelName));
+}
+
+function includedGoBoundTeamSpecs(proposal) {
+  return proposal.teamSpecs.filter((spec) => isGoBoundTeamIncluded(proposal.opponent, spec.teamType, spec.levelName));
+}
+
 function buildExternalOpponentSetup(rows) {
   const proposalsByOpponent = new Map();
 
@@ -367,6 +381,7 @@ function getGoBoundVenueKey(location) {
 function buildGoBoundVenueSetup(rows) {
   const proposals = new Map();
   rows.forEach((row) => {
+    if (!isGoBoundTeamIncluded(row.opponent, row.teamType, row.levelName)) return;
     const location = String(row.venue || "").trim();
     const key = getGoBoundVenueKey(location);
     if (!key) return;
@@ -840,7 +855,15 @@ function renderExternalOpponentSetup(rows) {
             </select>
           </label>
           <div class="schedule-import-file-label">Teams to create
-            <div class="schedule-opponent-teams">${proposal.teamSpecs.map((team) => `${escapeGoBoundPreview(team.teamName || team.name || proposal.opponent)} · ${escapeGoBoundPreview(team.teamType)} · ${escapeGoBoundPreview(team.levelName)}`).join("<br>")}</div>
+            <div class="schedule-opponent-teams">${proposal.teamSpecs.map((team, teamIndex) => `
+              <label class="schedule-team-import-option">
+                <span>${escapeGoBoundPreview(team.teamName || team.name || proposal.opponent)} - ${escapeGoBoundPreview(team.teamType)} - ${escapeGoBoundPreview(team.levelName)}</span>
+                <span class="schedule-team-import-switch">
+                  <input type="checkbox" role="switch" data-team-import-index="${teamIndex}" aria-label="Include ${escapeGoBoundPreview(proposal.opponent)} ${escapeGoBoundPreview(team.teamType)} ${escapeGoBoundPreview(team.levelName)} in import" ${isGoBoundTeamIncluded(proposal.opponent, team.teamType, team.levelName) ? "checked" : ""} />
+                  <span class="schedule-team-import-track" aria-hidden="true"></span>
+                </span>
+              </label>
+            `).join("")}</div>
           </div>
         </div>
       </article>
@@ -860,6 +883,19 @@ function renderExternalOpponentSetup(rows) {
     control.addEventListener("input", updateExternalSetupButton);
     control.addEventListener("change", updateExternalSetupButton);
   });
+  list.querySelectorAll("[data-team-import-index]").forEach((control) => {
+    control.addEventListener("change", () => {
+      const proposal = goBoundPreviewState.opponentSetup[Number(control.closest("[data-proposal-index]").dataset.proposalIndex)];
+      const spec = proposal.teamSpecs[Number(control.dataset.teamImportIndex)];
+      const key = goBoundTeamImportKey(proposal.opponent, spec.teamType, spec.levelName);
+      if (control.checked) goBoundPreviewState.excludedTeams.delete(key);
+      else goBoundPreviewState.excludedTeams.add(key);
+      updateExternalSetupButton();
+      renderGoBoundVenueSetup(goBoundPreviewState.previewRows);
+      const counts = goBoundPreviewState.previewCounts;
+      renderGoBoundPreview(goBoundPreviewState.previewRows, counts.fileRowCount, counts.skippedScrimmages, counts.duplicates);
+    });
+  });
   button.disabled = !canManageTeams;
   updateExternalSetupButton();
 }
@@ -868,7 +904,10 @@ function updateExternalSetupButton() {
   const button = document.getElementById("createReviewedExternalRecords");
   const list = document.getElementById("scheduleExternalSetupList");
   if (!button || !list) return;
-  const cards = [...list.querySelectorAll("[data-proposal-index]")];
+  const cards = [...list.querySelectorAll("[data-proposal-index]")].filter((card) => {
+    const proposal = goBoundPreviewState.opponentSetup[Number(card.dataset.proposalIndex)];
+    return proposal && includedGoBoundTeamSpecs(proposal).length > 0;
+  });
   const valid = cards.every((card) => {
     const index = Number(card.dataset.proposalIndex);
     const proposal = goBoundPreviewState.opponentSetup[index];
@@ -886,16 +925,19 @@ function updateExternalSetupButton() {
 }
 
 function renderGoBoundPreview(rows, fileRowCount, skippedScrimmages, duplicates) {
+  goBoundPreviewState.previewCounts = { fileRowCount, skippedScrimmages, duplicates };
   const summary = document.getElementById("scheduleImportSummary");
   const messages = document.getElementById("scheduleImportMessages");
   const body = document.getElementById("scheduleImportRows");
-  const readyCount = rows.filter((row) => row.ready).length;
-  const reviewCount = rows.length - readyCount;
+  const includedRows = rows.filter((row) => isGoBoundTeamIncluded(row.opponent, row.teamType, row.levelName));
+  const readyCount = includedRows.filter((row) => row.ready).length;
+  const reviewCount = includedRows.length - readyCount;
+  const excludedCount = rows.length - includedRows.length;
   const missingNonConference = !goBoundPreviewState.gameTypes.some(
     (item) => normalizeScheduleName(item.name) === "non conference",
   );
 
-  summary.textContent = `${fileRowCount} CSV rows · ${rows.length} games · ${skippedScrimmages} scrimmage rows excluded · ${duplicates} duplicate rows skipped · ${readyCount} ready · ${reviewCount} need mapping`;
+  summary.textContent = `${fileRowCount} CSV rows · ${rows.length} games · ${skippedScrimmages} scrimmage rows excluded · ${duplicates} duplicate rows skipped · ${excludedCount} games excluded by Team · ${readyCount} ready · ${reviewCount} need mapping`;
   messages.textContent = missingNonConference
     ? "Non-Conference is missing from the current Game Type catalog; add it before import."
     : "Schedule preview only: no Games are created or changed here.";
@@ -918,7 +960,7 @@ function renderGoBoundPreview(rows, fileRowCount, skippedScrimmages, duplicates)
       <td>${escapeGoBoundPreview(row.homeAway)}</td>
       <td>${escapeGoBoundPreview(row.gameType)}</td>
       <td>${escapeGoBoundPreview(row.venue)}</td>
-      <td class="${row.ready ? "schedule-import-status-ready" : "schedule-import-status-review"}">${escapeGoBoundPreview(row.ready ? "Ready for review" : row.problems.join("; "))}</td>
+      <td class="${row.ready ? "schedule-import-status-ready" : "schedule-import-status-review"}">${escapeGoBoundPreview(!isGoBoundTeamIncluded(row.opponent, row.teamType, row.levelName) ? "Excluded - Team import is off" : row.ready ? "Ready for review" : row.problems.join("; "))}</td>
     </tr>
   `).join("");
   updateGoBoundGameImportButton();
@@ -929,6 +971,7 @@ async function previewGoBoundCsv(file) {
   if (!sameFile) {
     goBoundPreviewState.venueMappings = new Map();
     goBoundPreviewState.gamesImported = false;
+    goBoundPreviewState.excludedTeams = new Set();
   }
   goBoundPreviewState.previewFile = file;
   goBoundPreviewState.previewRows = [];
@@ -992,6 +1035,7 @@ async function createReviewedExternalRecords() {
     const existingId = choice.startsWith("existing:") ? choice.slice("existing:".length) : "";
     return {
       proposal,
+      teamSpecs: proposal ? includedGoBoundTeamSpecs(proposal) : [],
       choice,
       existingOrganization: existingId
         ? goBoundPreviewState.organizations.find((organization) => String(organization.organizationId) === existingId)
@@ -999,7 +1043,12 @@ async function createReviewedExternalRecords() {
       newName: card.querySelector("[data-proposal-name]")?.value?.trim() || "",
       newLeagueId: card.querySelector("[data-proposal-league]")?.value || "",
     };
-  });
+  }).filter((selection) => selection.teamSpecs.length > 0);
+
+  if (!selections.length) {
+    messages.textContent = "No Teams are included. No Organizations or Teams were created.";
+    return;
+  }
 
   const invalid = selections.find((selection) =>
     !selection.proposal || selection.proposal.manualTeamReview || !selection.choice ||
@@ -1012,7 +1061,7 @@ async function createReviewedExternalRecords() {
     return;
   }
 
-  const missingLevel = selections.flatMap((selection) => selection.proposal.teamSpecs).find((spec) =>
+  const missingLevel = selections.flatMap((selection) => selection.teamSpecs).find((spec) =>
     !goBoundPreviewState.levels.some((item) =>
       normalizeScheduleName(item.levelName || item.name) === normalizeScheduleName(spec.levelName),
     ),
@@ -1022,7 +1071,7 @@ async function createReviewedExternalRecords() {
     return;
   }
 
-  const proposedTeamCount = selections.reduce((count, selection) => count + selection.proposal.teamSpecs.length, 0);
+  const proposedTeamCount = selections.reduce((count, selection) => count + selection.teamSpecs.length, 0);
   if (!window.confirm(`Create or reuse ${selections.length} opponent Organizations and create up to ${proposedTeamCount} current-season Teams? Games will not be imported.`)) return;
 
   button.disabled = true;
@@ -1104,7 +1153,7 @@ async function createReviewedExternalRecords() {
     if (!saveParticipation.ok) throw new Error(await goBoundResponseError(saveParticipation, "Could not add Organizations to the active Season."));
 
     for (const { selection, organization } of resolved) {
-      for (const spec of selection.proposal.teamSpecs) {
+      for (const spec of selection.teamSpecs) {
         const existingTeam = goBoundPreviewState.teams.find((team) =>
           String(team.organizationId) === String(organization.organizationId) &&
           normalizeScheduleName(team.name) === normalizeScheduleName(spec.name) &&
@@ -1231,6 +1280,7 @@ function buildGoBoundGameImportPlan() {
   const problems = [];
   const seen = new Set();
   goBoundPreviewState.previewRows.forEach((row, index) => {
+    if (!isGoBoundTeamIncluded(row.opponent, row.teamType, row.levelName)) return;
     if (!row.ready) {
       problems.push(`Row ${index + 1}: ${row.problems.join("; ")}`);
       return;
