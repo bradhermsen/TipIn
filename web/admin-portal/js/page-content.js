@@ -1607,7 +1607,7 @@ window.PageContentRegistry.schedules = () => `
     <div class="schedule-import-preview-header">
       <div>
         <h2 id="scheduleImportPreviewTitle">GoBound Schedule Preview</h2>
-        <p>Preview the CSV, then approve missing opponent Organizations and Teams. Games are not imported here.</p>
+        <p>Review opponent records and venues, then explicitly import the Games.</p>
       </div>
       <button id="closeScheduleImportPreview" class="nf-btn nf-btn-secondary" type="button">Close</button>
     </div>
@@ -1619,7 +1619,7 @@ window.PageContentRegistry.schedules = () => `
       <div class="schedule-import-preview-header">
         <div>
           <h3 id="scheduleExternalSetupTitle">Review Missing Opponent Records</h3>
-          <p>Approve the External Organizations and season Teams needed by this schedule. This does not import Games.</p>
+          <p>This action creates or reuses opponent Organizations and current-season Teams only. Import Games in the separate section below.</p>
         </div>
       </div>
       <div id="scheduleExternalSetupMessages" class="schedule-import-messages" aria-live="polite"></div>
@@ -1632,13 +1632,25 @@ window.PageContentRegistry.schedules = () => `
       <div class="schedule-import-preview-header">
         <div>
           <h3 id="scheduleVenueSetupTitle">Review Schedule Venues</h3>
-          <p>Keep away locations as external text. Create a Winona-managed Arena/Rink only after confirming both names. This does not import Games.</p>
+          <p>Keep away locations as external text. Create a Winona-managed Arena/Rink only after confirming both names. Game import is separate.</p>
         </div>
       </div>
       <div id="scheduleVenueSetupMessages" class="schedule-import-messages" aria-live="polite"></div>
       <div id="scheduleVenueSetupList" class="schedule-external-setup-list"></div>
       <div class="schedule-external-setup-actions">
         <button id="createReviewedManagedVenues" class="nf-btn nf-btn-primary" type="button" disabled>Create Reviewed Managed Venues</button>
+      </div>
+    </section>
+    <section id="scheduleGameImportSection" class="schedule-external-setup" aria-labelledby="scheduleGameImportTitle">
+      <div class="schedule-import-preview-header">
+        <div>
+          <h3 id="scheduleGameImportTitle">Import Reviewed Games</h3>
+          <p>Creates only Games from fully mapped rows. Existing matching Games are skipped; Organizations, Teams, and venues are not changed.</p>
+        </div>
+      </div>
+      <div id="scheduleGameImportMessages" class="schedule-import-messages" aria-live="polite">Preview a GoBound CSV to prepare Games for import.</div>
+      <div class="schedule-external-setup-actions">
+        <button id="importReviewedGoBoundGames" class="nf-btn nf-btn-primary" type="button" disabled>Import Reviewed Games</button>
       </div>
     </section>
     <div class="schedule-import-table-wrap">
