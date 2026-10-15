@@ -2,6 +2,66 @@
   margin-bottom: 16px;
 }
 
+.schedule-team-import-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-weight: 400;
+}
+
+.schedule-team-import-switch {
+  position: relative;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 22px;
+}
+
+.schedule-team-import-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.schedule-team-import-track {
+  display: block;
+  width: 36px;
+  height: 22px;
+  border-radius: 11px;
+  background: #606974;
+  pointer-events: none;
+}
+
+.schedule-team-import-track::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.schedule-team-import-switch input:checked + .schedule-team-import-track {
+  background: #238446;
+}
+
+.schedule-team-import-switch input:checked + .schedule-team-import-track::after {
+  left: 17px;
+}
+
+.schedule-team-import-switch input:focus-visible + .schedule-team-import-track {
+  outline: 2px solid var(--nf-text);
+  outline-offset: 3px;
+}
+
 .schedule-import-preview-header {
   display: flex;
   justify-content: space-between;
