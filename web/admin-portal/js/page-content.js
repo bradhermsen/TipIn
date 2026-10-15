@@ -1632,13 +1632,13 @@ window.PageContentRegistry.schedules = () => `
       <div class="schedule-import-preview-header">
         <div>
           <h3 id="scheduleVenueSetupTitle">Review Schedule Venues</h3>
-          <p>Keep away locations as external text. Create a Winona-managed Arena/Rink only after confirming both names. Game import is separate.</p>
+          <p>Keep the default to store location text on Games. Explicitly add a venue to Arena Manager as External, or create a Winona-managed home Arena/Rink. Game import is separate.</p>
         </div>
       </div>
       <div id="scheduleVenueSetupMessages" class="schedule-import-messages" aria-live="polite"></div>
       <div id="scheduleVenueSetupList" class="schedule-external-setup-list"></div>
       <div class="schedule-external-setup-actions">
-        <button id="createReviewedManagedVenues" class="nf-btn nf-btn-primary" type="button" disabled>Create Selected Managed Venues</button>
+        <button id="createReviewedManagedVenues" class="nf-btn nf-btn-primary" type="button" disabled>Create Selected Venues in Arena Manager</button>
       </div>
     </section>
     <section id="scheduleGameImportSection" class="schedule-external-setup" aria-labelledby="scheduleGameImportTitle">

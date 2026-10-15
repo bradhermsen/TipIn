@@ -3,7 +3,7 @@ name: Deploy TipIn API Dev
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - api/TipInAPI/**
       - .github/workflows/deploy-netfront-api-dev.yml
