@@ -553,17 +553,30 @@ function saveGoBoundVenueChoice(card, action) {
 function updateReviewedManagedVenueButton() {
   const button = document.getElementById("createReviewedManagedVenues");
   const list = document.getElementById("scheduleVenueSetupList");
-  if (!button || !list) return;
+  const messages = document.getElementById("scheduleVenueSetupMessages");
+  if (!button || !list || !messages) return;
   const newCards = [...list.querySelectorAll("[data-venue-index]")].filter((card) => {
     const action = card.querySelector("[data-venue-action]")?.value || "";
     return action === "new" || action.startsWith("new-rink:");
   });
-  button.disabled = !Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner) ||
-    !newCards.length || newCards.some((card) =>
-      (card.querySelector("[data-venue-action]")?.value === "new" &&
-        !card.querySelector("[data-venue-arena-name]")?.value.trim()) ||
-      !card.querySelector("[data-venue-rink-name]")?.value.trim(),
-    );
+  const canManageFacilities = Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner);
+  const hasIncompleteNames = newCards.some((card) =>
+    (card.querySelector("[data-venue-action]")?.value === "new" &&
+      !card.querySelector("[data-venue-arena-name]")?.value.trim()) ||
+    !card.querySelector("[data-venue-rink-name]")?.value.trim(),
+  );
+  button.disabled = !canManageFacilities || !newCards.length || hasIncompleteNames;
+  if (!canManageFacilities) {
+    messages.textContent = "Your account needs SuperAdmin, OrgAdmin, or OrgOwner access to create managed venues.";
+  } else if (goBoundPreviewState.facilityCatalogError) {
+    messages.textContent = "The managed venue catalog failed to load. Reload the CSV preview before creating venues.";
+  } else if (!newCards.length) {
+    messages.textContent = "No new managed venues are selected. Choose a home-only location and select Create or Add a Rink; away locations stay external.";
+  } else if (hasIncompleteNames) {
+    messages.textContent = "Enter both the Arena and Rink names for every selected venue.";
+  } else {
+    messages.textContent = `${newCards.length} managed venue${newCards.length === 1 ? "" : "s"} ready to create. This does not import Games.`;
+  }
 }
 
   async function createReviewedManagedVenues() {
