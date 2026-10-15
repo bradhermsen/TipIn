@@ -1638,7 +1638,7 @@ window.PageContentRegistry.schedules = () => `
       <div id="scheduleVenueSetupMessages" class="schedule-import-messages" aria-live="polite"></div>
       <div id="scheduleVenueSetupList" class="schedule-external-setup-list"></div>
       <div class="schedule-external-setup-actions">
-        <button id="createReviewedManagedVenues" class="nf-btn nf-btn-primary" type="button" disabled>Create Reviewed Managed Venues</button>
+        <button id="createReviewedManagedVenues" class="nf-btn nf-btn-primary" type="button" disabled>Create Selected Managed Venues</button>
       </div>
     </section>
     <section id="scheduleGameImportSection" class="schedule-external-setup" aria-labelledby="scheduleGameImportTitle">
