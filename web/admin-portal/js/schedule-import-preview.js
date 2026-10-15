@@ -408,17 +408,6 @@ function suggestGoBoundVenueNames(location) {
 }
 
 function defaultGoBoundVenueChoice(proposal) {
-  if (proposal.homeCount > 0 && proposal.awayCount === 0 && proposal.organizationId && !goBoundPreviewState.facilityCatalogError) {
-    const existingMatch = getWinonaManagedArenas(proposal.organizationId).flatMap((arena) =>
-      (arena.rinks || []).filter((rink) => rink.isActive).map((rink) => ({ arena, rink })),
-    ).find(({ arena, rink }) =>
-      normalizeScheduleName(`${arena.name} ${rink.name}`) === normalizeScheduleName(proposal.location),
-    );
-    if (existingMatch) {
-      return { mode: "managed", arenaId: existingMatch.arena.arenaId, rinkId: existingMatch.rink.rinkId };
-    }
-    return { mode: "new", ...suggestGoBoundVenueNames(proposal.location) };
-  }
   return { mode: "external", location: proposal.location };
 }
 
@@ -505,6 +494,15 @@ function renderGoBoundVenueSetup(rows) {
       const isNewRink = select.value.startsWith("new-rink:");
       card.querySelector("[data-new-venue-fields]").hidden = !isNewPair && !isNewRink;
       card.querySelector("[data-new-arena-wrap]").hidden = !isNewPair;
+      if (isNewPair || isNewRink) {
+        const suggestions = suggestGoBoundVenueNames(
+          goBoundPreviewState.venueSetup[Number(card.dataset.venueIndex)]?.location,
+        );
+        const arenaName = card.querySelector("[data-venue-arena-name]");
+        const rinkName = card.querySelector("[data-venue-rink-name]");
+        if (isNewPair && arenaName && !arenaName.value.trim()) arenaName.value = suggestions.arenaName;
+        if (rinkName && !rinkName.value.trim()) rinkName.value = suggestions.rinkName;
+      }
       saveGoBoundVenueChoice(card, select.value);
       updateReviewedManagedVenueButton();
       updateGoBoundGameImportButton();
@@ -571,7 +569,7 @@ function updateReviewedManagedVenueButton() {
   } else if (goBoundPreviewState.facilityCatalogError) {
     messages.textContent = "The managed venue catalog failed to load. Reload the CSV preview before creating venues.";
   } else if (!newCards.length) {
-    messages.textContent = "No new managed venues are selected. Choose a home-only location and select Create or Add a Rink; away locations stay external.";
+    messages.textContent = "All locations are currently external or mapped to existing venues. Select Create or Add a Rink only for locations you want to add to Winona.";
   } else if (hasIncompleteNames) {
     messages.textContent = "Enter both the Arena and Rink names for every selected venue.";
   } else {
