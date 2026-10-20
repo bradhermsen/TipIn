@@ -1,5 +1,6 @@
 import React from "react";
 import type { NextGameCardModel } from "../types/gameView";
+import { ManagedBadge } from "./ManagedBadge";
 
 interface Props {
   game: NextGameCardModel;
@@ -35,6 +36,7 @@ export function NextGameCard({ game, onClick }: Props) {
     >
       <div className="game-view-next-card-top">
         <p className="game-view-card-eyebrow">In Progress</p>
+        {game.isTipInManaged ? <ManagedBadge /> : null}
         {game.isLive ? <span className="game-view-live-pill">LIVE</span> : null}
       </div>
 

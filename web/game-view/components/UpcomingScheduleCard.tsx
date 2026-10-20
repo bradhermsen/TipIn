@@ -1,5 +1,6 @@
 import React from "react";
 import type { UpcomingScheduleItemModel } from "../types/gameView";
+import { ManagedBadge } from "./ManagedBadge";
 
 interface Props {
   games: UpcomingScheduleItemModel[];
@@ -31,6 +32,7 @@ export function UpcomingScheduleCard({ games }: Props) {
 
             return (
               <li key={game.gameId} className="game-view-schedule-row">
+                {game.isTipInManaged ? <ManagedBadge /> : null}
                 <p className="game-view-schedule-matchup">
                   {game.matchupLabel ||
                     `${game.awayTeamName} at ${game.homeTeamName}`}

@@ -23,6 +23,7 @@ export interface GameViewFilterData {
 
 export interface NextGameCardModel {
   gameId: string;
+  isTipInManaged?: boolean;
   teamId: string;
   teamName: string;
   opponentName: string;
@@ -37,6 +38,7 @@ export interface NextGameCardModel {
 
 export interface UpcomingScheduleItemModel {
   gameId: string;
+  isTipInManaged?: boolean;
   startTimeIso: string;
   homeTeamName: string;
   awayTeamName: string;
@@ -47,6 +49,7 @@ export interface UpcomingScheduleItemModel {
 
 export interface LastFinalGameItemModel {
   gameId: string;
+  isTipInManaged?: boolean;
   homeTeamName: string;
   awayTeamName: string;
   matchupLabel?: string;
@@ -90,6 +93,7 @@ export interface ApiTeam {
 
 export interface ApiGameListItem {
   gameId: string;
+  isTipInManaged?: boolean;
   homeTeamId: string;
   homeTeamName: string;
   awayTeamId: string;

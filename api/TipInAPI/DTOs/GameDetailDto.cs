@@ -41,6 +41,8 @@ namespace TipInAPI.DTOs
 
         public string Status { get; set; }
 
+        public bool IsTipInManaged { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
