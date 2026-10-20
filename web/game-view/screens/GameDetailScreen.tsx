@@ -161,6 +161,7 @@ export function GameDetailScreen() {
   const [gameTitle, setGameTitle] = useState("");
   const [periodLabel, setPeriodLabel] = useState("Period -");
   const [statusLabel, setStatusLabel] = useState("Scheduled");
+  const [modeLabel, setModeLabel] = useState("");
   const [isInProgress, setIsInProgress] = useState(false);
   const [homeTeamName, setHomeTeamName] = useState("Home");
   const [awayTeamName, setAwayTeamName] = useState("Away");
@@ -351,6 +352,12 @@ export function GameDetailScreen() {
           (isInProgress ? 1 : undefined);
         setCurrentPeriodNumber(resolvedCurrentPeriod);
         setPeriodLabel(toPeriodToken(resolvedCurrentPeriod));
+        setModeLabel(summary?.gameMode === "basic"
+          ? "Basic Mode - Clock not tracked"
+          : summary?.gameMode === "clock" ? "Clock Mode"
+          : summary?.gameMode === "scoreboard"
+            ? `Scoreboard Mode${summary.clockTrackingAvailable === false ? " - Disconnected" : summary.clockTrackingAvailable === true ? " - Connected" : ""}`
+            : "");
 
         const score = buildScoreFromSummary(
           summary,
@@ -479,7 +486,7 @@ export function GameDetailScreen() {
   }, [gameId, selectedTeamId, refreshNonce]);
 
   useEffect(() => {
-    if (!gameId || !isInProgress) {
+    if (!gameId || isFinalStatus(statusLabel)) {
       return;
     }
 
@@ -488,7 +495,7 @@ export function GameDetailScreen() {
     }, 5000);
 
     return () => clearInterval(timer);
-  }, [gameId, isInProgress]);
+  }, [gameId, statusLabel]);
 
   return (
     <main className="game-view-root">
@@ -535,6 +542,7 @@ export function GameDetailScreen() {
               currentPeriodNumber={currentPeriodNumber}
               periodLabel={periodLabel}
               statusLabel={statusLabel}
+              statusDetail={modeLabel}
               isInProgress={isInProgress}
             />
           </section>

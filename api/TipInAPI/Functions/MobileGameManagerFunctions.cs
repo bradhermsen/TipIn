@@ -752,6 +752,14 @@ namespace TipInAPI.Functions
                 return bad;
             }
 
+            var gameMode = string.IsNullOrWhiteSpace(payload.GameMode) ? null : payload.GameMode.Trim().ToLowerInvariant();
+            if (gameMode != null && gameMode != "basic" && gameMode != "clock" && gameMode != "scoreboard")
+            {
+                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+                await bad.WriteAsJsonAsync(new { error = "Game mode must be basic, clock, or scoreboard." });
+                return bad;
+            }
+
             using var conn = _connectionFactory.CreateConnection();
 
             const string ensureTableSql = @"
@@ -767,6 +775,8 @@ namespace TipInAPI.Functions
                         AwaySkatersOnIce  INT NULL,
                         HomeStartersJson  NVARCHAR(MAX) NULL,
                         AwayStartersJson  NVARCHAR(MAX) NULL,
+                        GameMode          NVARCHAR(16) NULL,
+                        ClockTrackingAvailable BIT NULL,
                         UpdatedAt         DATETIME2 NOT NULL CONSTRAINT DF_GameLiveStatus_UpdatedAt DEFAULT SYSUTCDATETIME()
                     );
                 END;
@@ -784,6 +794,16 @@ namespace TipInAPI.Functions
                 IF COL_LENGTH('dbo.GameLiveStatus', 'AwayStartersJson') IS NULL
                 BEGIN
                     ALTER TABLE dbo.GameLiveStatus ADD AwayStartersJson NVARCHAR(MAX) NULL;
+                END;
+
+                IF COL_LENGTH('dbo.GameLiveStatus', 'GameMode') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.GameLiveStatus ADD GameMode NVARCHAR(16) NULL;
+                END;
+
+                IF COL_LENGTH('dbo.GameLiveStatus', 'ClockTrackingAvailable') IS NULL
+                BEGIN
+                    ALTER TABLE dbo.GameLiveStatus ADD ClockTrackingAvailable BIT NULL;
                 END;";
 
             const string upsertSql = @"
@@ -798,20 +818,24 @@ namespace TipInAPI.Functions
                         AwaySkatersOnIce = @AwaySkatersOnIce,
                         HomeStartersJson = @HomeStartersJson,
                         AwayStartersJson = @AwayStartersJson,
+                        GameMode = @GameMode,
+                        ClockTrackingAvailable = @ClockTrackingAvailable,
                         UpdatedAt        = SYSUTCDATETIME()
                 WHEN NOT MATCHED THEN
-                    INSERT (GameId, HomeOnPowerPlay, AwayOnPowerPlay, CurrentPeriod, HomeSkatersOnIce, AwaySkatersOnIce, HomeStartersJson, AwayStartersJson)
-                    VALUES (@GameId, @HomeOnPowerPlay, @AwayOnPowerPlay, @CurrentPeriod, @HomeSkatersOnIce, @AwaySkatersOnIce, @HomeStartersJson, @AwayStartersJson);";
+                    INSERT (GameId, HomeOnPowerPlay, AwayOnPowerPlay, CurrentPeriod, HomeSkatersOnIce, AwaySkatersOnIce, HomeStartersJson, AwayStartersJson, GameMode, ClockTrackingAvailable)
+                    VALUES (@GameId, @HomeOnPowerPlay, @AwayOnPowerPlay, @CurrentPeriod, @HomeSkatersOnIce, @AwaySkatersOnIce, @HomeStartersJson, @AwayStartersJson, @GameMode, @ClockTrackingAvailable);";
 
             await conn.ExecuteAsync(ensureTableSql);
             await conn.ExecuteAsync(upsertSql, new
             {
                 GameId = gameId,
-                HomeOnPowerPlay = payload.HomeOnPowerPlay ? 1 : 0,
-                AwayOnPowerPlay = payload.AwayOnPowerPlay ? 1 : 0,
+                GameMode = gameMode,
+                ClockTrackingAvailable = gameMode == "basic" ? false : payload.ClockTrackingAvailable,
+                HomeOnPowerPlay = gameMode != "basic" && payload.HomeOnPowerPlay ? 1 : 0,
+                AwayOnPowerPlay = gameMode != "basic" && payload.AwayOnPowerPlay ? 1 : 0,
                 CurrentPeriod = payload.CurrentPeriod,
-                HomeSkatersOnIce = payload.HomeSkatersOnIce,
-                AwaySkatersOnIce = payload.AwaySkatersOnIce,
+                HomeSkatersOnIce = gameMode == "basic" ? null : payload.HomeSkatersOnIce,
+                AwaySkatersOnIce = gameMode == "basic" ? null : payload.AwaySkatersOnIce,
                 HomeStartersJson = payload.HomeStarterIds == null ? null : System.Text.Json.JsonSerializer.Serialize(payload.HomeStarterIds),
                 AwayStartersJson = payload.AwayStarterIds == null ? null : System.Text.Json.JsonSerializer.Serialize(payload.AwayStarterIds),
             });
@@ -2145,6 +2169,8 @@ namespace TipInAPI.Functions
 
         private class MobileLiveStatusRequest
         {
+            public string? GameMode { get; set; }
+            public bool? ClockTrackingAvailable { get; set; }
             public bool HomeOnPowerPlay { get; set; }
             public bool AwayOnPowerPlay { get; set; }
             public int? CurrentPeriod { get; set; }

@@ -266,6 +266,9 @@ function normalizeGameSummary(payload: unknown): ApiGameSummary {
     awayShotsOT: pickOptionalNumber(obj, "awayShotsOT", "AwayShotsOT"),
     awayShots: pickOptionalNumber(obj, "awayShots", "AwayShots"),
     currentPeriod: pickOptionalNumber(obj, "currentPeriod", "CurrentPeriod"),
+    gameMode: pickString(obj, "gameMode", "GameMode").trim().toLowerCase() || undefined,
+    clockTrackingAvailable: pickOptionalBoolean(obj, "clockTrackingAvailable", "ClockTrackingAvailable"),
+    manpowerTrackingAvailable: pickOptionalBoolean(obj, "manpowerTrackingAvailable", "ManpowerTrackingAvailable"),
     homeOnPowerPlay: pickOptionalBoolean(
       obj,
       "homeOnPowerPlay",

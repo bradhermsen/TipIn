@@ -20,6 +20,17 @@ import {
 } from "react-native";
 
 type AccessRole = "GM" | "SM" | "CA" | "AD";
+type GameMode = "basic" | "clock" | "scoreboard";
+
+export function resolveGameMode(savedMode: unknown, gatewayEnabled: boolean): GameMode {
+  return savedMode === "basic" || savedMode === "clock" || savedMode === "scoreboard"
+    ? savedMode
+    : gatewayEnabled ? "scoreboard" : "clock";
+}
+
+export function canRecoverClockSource(from: GameMode, to: GameMode, paused: boolean): boolean {
+  return paused && from !== to && from !== "basic" && to !== "basic";
+}
 
 type Stage =
   | "login"
@@ -435,7 +446,14 @@ type SessionState = {
   homeScore: number;
   awayScore: number;
   apiBase: string;
+  gameMode?: GameMode;
+  gameModeConfirmed?: boolean;
+  gameModeLocked?: boolean;
 };
+
+export function lockSessionGameMode(session: SessionState, gatewayEnabled: boolean): SessionState {
+  return { ...session, gameMode: resolveGameMode(session.gameMode, gatewayEnabled), gameModeConfirmed: true, gameModeLocked: true };
+}
 
 type ActiveGameSnapshot = {
   userId: string;
@@ -1055,6 +1073,21 @@ export function computeElapsedTime(
   return formatSecondsToClock(elapsedSeconds);
 }
 
+export function basicEventElapsedTime(periodLengthMinutes: number, clockRemaining: string): string | null {
+  const match = clockRemaining.trim().match(/^(\d{1,2}):(\d{1,2})$/);
+  if (!match || !Number.isFinite(periodLengthMinutes) || periodLengthMinutes <= 0) return null;
+  const minutes = Number(match[1]);
+  const seconds = Number(match[2]);
+  if (seconds > 59 || minutes * 60 + seconds > periodLengthMinutes * 60) return null;
+  return computeElapsedTime(periodLengthMinutes, clockRemaining.trim());
+}
+
+export function updateBasicClockPart(clock: string, part: "minutes" | "seconds", value: string): string {
+  if (!/^\d{0,2}$/.test(value) || (part === "seconds" && value !== "" && Number(value) > 59)) return clock;
+  const [minutes = "", seconds = ""] = clock.split(":");
+  return part === "minutes" ? `${value}:${seconds}` : `${minutes}:${value}`;
+}
+
 function formatEventTimeInput(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 4);
   if (digits.length <= 2) return digits;
@@ -1524,6 +1557,53 @@ function summarizePayload(payload: unknown): DebugPayload {
   return { value: payload ?? null };
 }
 
+function BasicEventTimeFields({ period, clockRemaining, onPeriodChange, onClockChange }: {
+  period: number;
+  clockRemaining: string;
+  onPeriodChange: (period: number) => void;
+  onClockChange: (clock: string) => void;
+}) {
+  return <View style={styles.rowButtons}>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.sectionLabel}>PERIOD (4 = OT1)</Text>
+      <TextInput
+        accessibilityLabel="Event period"
+        style={styles.inputCompact}
+        value={period ? String(period) : ""}
+        onChangeText={(value) => onPeriodChange(Number(value.replace(/\D/g, "")))}
+        keyboardType="number-pad"
+        maxLength={2}
+      />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.sectionLabel}>CLOCK REMAINING</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <TextInput
+          accessibilityLabel="Clock remaining minutes"
+          style={[styles.inputCompact, { flex: 1 }]}
+          value={clockRemaining.split(":")[0] || ""}
+          onChangeText={(value) => onClockChange(updateBasicClockPart(clockRemaining, "minutes", value))}
+          keyboardType="number-pad"
+          placeholder="MM"
+          placeholderTextColor="#7a8fa8"
+          maxLength={2}
+        />
+        <Text style={styles.sectionLabel}>:</Text>
+        <TextInput
+          accessibilityLabel="Clock remaining seconds"
+          style={[styles.inputCompact, { flex: 1 }]}
+          value={clockRemaining.split(":")[1] || ""}
+          onChangeText={(value) => onClockChange(updateBasicClockPart(clockRemaining, "seconds", value))}
+          keyboardType="number-pad"
+          placeholder="SS"
+          placeholderTextColor="#7a8fa8"
+          maxLength={2}
+        />
+      </View>
+    </View>
+  </View>;
+}
+
 export default function App() {
   const [stage, setStage] = useState<Stage>("login");
   const [restoreStatus, setRestoreStatus] = useState("idle");
@@ -1693,6 +1773,16 @@ export default function App() {
   const [emailDeliveryMessage, setEmailDeliveryMessage] = useState("");
   const [isFinalizingGame, setIsFinalizingGame] = useState(false);
   const [gameStartedAtIso, setGameStartedAtIso] = useState<string | null>(null);
+  const gameMode = resolveGameMode(session?.gameMode, scoreboardGatewaySettings.enabled);
+  const isBasicMode = gameMode === "basic";
+  const isGameModeLocked = Boolean(session?.gameModeLocked || gameStartedAtIso ||
+    stage === "gameDashboard" || stage === "gameSummary" || stage === "sendScoresheet" ||
+    /^(in progress|final|completed|closed)$/i.test(nextGame?.status?.trim() || ""));
+  const gameModeRef = useRef<GameMode>(gameMode);
+  gameModeRef.current = gameMode;
+  const sessionRef = useRef<SessionState | null>(session);
+  sessionRef.current = session;
+  const clockRunningRef = useRef(false);
 
   const [homeGoaliePulled, setHomeGoaliePulled] = useState(false);
   const [awayGoaliePulled, setAwayGoaliePulled] = useState(false);
@@ -1734,6 +1824,7 @@ export default function App() {
 
   function handleClockExpired() {
     if (
+      gameModeRef.current === "basic" ||
       periodExpiryHandledRef.current ||
       periodControllerStateRef.current !== "IN_PROGRESS"
     ) {
@@ -1750,6 +1841,7 @@ export default function App() {
     tickIntervalMs: 100,
     onExpire: handleClockExpired,
   });
+  clockRunningRef.current = isClockRunning || gameClock.isRunning;
 
   const activeApiBase = DEFAULT_PUBLIC_API_BASE;
 
@@ -1828,7 +1920,7 @@ export default function App() {
   const isRunningTimeActive =
     session?.period === 3 &&
     Math.abs((session?.homeScore ?? 0) - (session?.awayScore ?? 0)) >= 5;
-  const isEventEntryLockedByClock = isClockRunning && !isRunningTimeActive;
+  const isEventEntryLockedByClock = !isBasicMode && isClockRunning && !isRunningTimeActive;
   const isRunningTimeEventModalOpen =
     isGoalModalOpen || isPenaltyModalOpen || isTimeoutModalOpen;
   const isAnyModalOpen =
@@ -1855,7 +1947,7 @@ export default function App() {
   const goalModalSkaterStrength = goalModal
     ? getSkaterStrengthContext(goalModal.scoringTeamId)
     : "Even Strength";
-  const shouldLockEvenStrength = goalModalSkaterStrength === "Power Play";
+  const shouldLockEvenStrength = !isBasicMode && goalModalSkaterStrength === "Power Play";
   const eventEditTeamRoster = eventEditModal
     ? getRosterForTeam(eventEditModal.teamId).filter(
         (player) => player.isActive,
@@ -1871,7 +1963,7 @@ export default function App() {
       ? getSkaterStrengthContext(eventEditModal.teamId)
       : "Even Strength";
   const shouldLockEventEditEvenStrength =
-    eventEditSkaterStrength === "Power Play";
+    !isBasicMode && eventEditSkaterStrength === "Power Play";
   const penaltyTeamRoster = penaltyModal
     ? getRosterForTeam(penaltyModal.penalizedTeamId).filter(
         (player) => player.isActive,
@@ -1893,6 +1985,7 @@ export default function App() {
   const homeActivePenalties = safeActivePenalties
     .filter(
       (penalty) =>
+        !isBasicMode &&
         penalty.teamId === homeTeamId &&
         Number.isFinite(penalty.remainingSeconds) &&
         penalty.remainingSeconds > 0,
@@ -1901,6 +1994,7 @@ export default function App() {
   const awayActivePenalties = safeActivePenalties
     .filter(
       (penalty) =>
+        !isBasicMode &&
         penalty.teamId === awayTeamId &&
         Number.isFinite(penalty.remainingSeconds) &&
         penalty.remainingSeconds > 0,
@@ -1909,12 +2003,14 @@ export default function App() {
 
   const homeManpowerPenalties = safeActivePenalties.filter(
     (penalty) =>
+      !isBasicMode &&
       penalty.teamId === homeTeamId &&
       penalty.affectsManpower &&
       penalty.remainingSeconds > 0,
   ).length;
   const awayManpowerPenalties = safeActivePenalties.filter(
     (penalty) =>
+      !isBasicMode &&
       penalty.teamId === awayTeamId &&
       penalty.affectsManpower &&
       penalty.remainingSeconds > 0,
@@ -1935,10 +2031,10 @@ export default function App() {
 
   useEffect(() => {
     const gameId = nextGame?.gameId;
-    if (!gameId || !session) return;
+    if (!gameId || !session || stage !== "gameDashboard" || gameHasEnded) return;
     const homeStarters = startersByTeam[homeTeamId ?? ""] ?? [];
     const awayStarters = startersByTeam[awayTeamId ?? ""] ?? [];
-    void syncLiveStatus(
+    const publishStatus = () => void syncLiveStatus(
       gameId,
       homeOnPowerPlay,
       awayOnPowerPlay,
@@ -1947,6 +2043,9 @@ export default function App() {
       homeStarters,
       awayStarters,
     );
+    publishStatus();
+    const statusTimer = setInterval(publishStatus, 10000);
+    return () => clearInterval(statusTimer);
   }, [
     nextGame?.gameId,
     session,
@@ -1958,9 +2057,16 @@ export default function App() {
     awayOnPowerPlay,
     homeSkatersOnIce,
     awaySkatersOnIce,
+    isBasicMode,
+    gameMode,
+    scoreboardConnectionState,
+    stage,
+    gameHasEnded,
   ]);
 
   const scoreboardConnectionBadgeText = useMemo(() => {
+    if (isBasicMode) return "Basic Mode";
+    if (gameMode === "clock") return "Tablet Clock";
     if (!scoreboardGatewaySettings.enabled) {
       return "Manual Clock";
     }
@@ -1971,7 +2077,7 @@ export default function App() {
       return "Connecting...";
     }
     return "Not Connected";
-  }, [scoreboardConnectionState, scoreboardGatewaySettings.enabled]);
+  }, [scoreboardConnectionState, scoreboardGatewaySettings.enabled, gameMode]);
 
   const scoreboardConnectionBadgeStyle = useMemo(() => {
     if (!scoreboardGatewaySettings.enabled) {
@@ -2001,11 +2107,12 @@ export default function App() {
 
   const isScoreboardClockSyncActive =
     stage === "gameDashboard" &&
+    gameMode === "scoreboard" &&
     scoreboardGatewaySettings.enabled &&
     scoreboardConnectionState === "connected";
-  const clockSourceLabel = isScoreboardClockSyncActive
+  const clockSourceLabel = isBasicMode ? "Basic Mode" : isScoreboardClockSyncActive
     ? "Scoreboard Sync"
-    : "Manual (Tablet)";
+    : gameMode === "scoreboard" ? "Scoreboard Disconnected" : "Clock Mode (Tablet)";
 
   useEffect(() => {
     scoreboardClockSyncActiveRef.current = isScoreboardClockSyncActive;
@@ -2625,7 +2732,7 @@ export default function App() {
   }
 
   function applyGatewayClockPayload(payload: Record<string, unknown>) {
-    if (stageRef.current !== "gameDashboard") return;
+    if (stageRef.current !== "gameDashboard" || gameModeRef.current !== "scoreboard") return;
 
     const nextClock = buildClockDisplayFromGatewayPayload(payload);
     if (!nextClock) return;
@@ -2718,7 +2825,7 @@ export default function App() {
   }
 
   function requestScoreboardReconnect() {
-    if (!scoreboardGatewaySettings.enabled) return;
+    if (gameMode !== "scoreboard" || !scoreboardGatewaySettings.enabled) return;
     clearScheduledScoreboardReconnect();
     scoreboardReconnectAttemptRef.current = 0;
     disconnectScoreboardSocket();
@@ -2736,6 +2843,11 @@ export default function App() {
   }
 
   async function saveScoreboardSettings() {
+    if (!session || !canControlGame(session.role)) return;
+    if (gameMode === "scoreboard" && clockRunningRef.current) {
+      Alert.alert("Pause the Scoreboard", "Stop the scoreboard clock before changing its connection settings.");
+      return;
+    }
     const normalizedSettings: ScoreboardGatewaySettings = {
       enabled: scoreboardSettingsDraft.enabled,
       host:
@@ -2745,6 +2857,7 @@ export default function App() {
       tokenSecret: scoreboardSettingsDraft.tokenSecret.trim(),
     };
 
+    updateSession(isGameModeLocked ? lockSessionGameMode(session, scoreboardGatewaySettings.enabled) : { gameMode });
     setScoreboardGatewaySettings(normalizedSettings);
     setScoreboardSettingsDraft(normalizedSettings);
     setShowScoreboardSettingsModal(false);
@@ -2763,6 +2876,61 @@ export default function App() {
       const message = err instanceof Error ? err.message : String(err);
       trace("scoreboard.gateway.settings.save.error", { message });
     }
+  }
+
+  function selectVerifiedGameMode(mode: GameMode) {
+    if (!session || !canEditVerifyGame(session.role) || isGameModeLocked) return;
+    updateSession({ gameMode: mode, gameModeConfirmed: true });
+    if (mode === "scoreboard") setScoreboardGatewaySettings((prev) => ({ ...prev, enabled: true }));
+  }
+
+  function confirmGameVerification() {
+    if (!session) return;
+    if (!session.gameModeConfirmed && !isGameModeLocked) {
+      Alert.alert("Select Game Mode", "Choose Basic, Clock, or Scoreboard before confirming this Game.");
+      return;
+    }
+    if (isGameModeLocked) updateSession(lockSessionGameMode(session, scoreboardGatewaySettings.enabled));
+    setStage("rosterVerify");
+  }
+
+  function requestClockSourceRecovery() {
+    if (!session || !canControlGame(session.role) || stage !== "gameDashboard" || gameHasEnded) return;
+    const recoveryGame = nextGame;
+    if (!recoveryGame) return;
+    const from = gameModeRef.current;
+    const to: GameMode = from === "clock" ? "scoreboard" : "clock";
+    if (!canRecoverClockSource(from, to, !clockRunningRef.current)) {
+      Alert.alert("Recovery Unavailable", "Pause the clock first. Basic Mode cannot be changed during an active Game.");
+      return;
+    }
+    if (to === "scoreboard" && (!normalizeScoreboardHost(scoreboardGatewaySettings.host) || !scoreboardGatewaySettings.tokenSecret.trim())) {
+      Alert.alert("Gateway Settings Required", "Save the gateway address and token before switching to Scoreboard Mode.");
+      return;
+    }
+    Alert.alert("Recover Clock Source?", to === "clock"
+      ? "Use the last scoreboard clock and period on the tablet. Verify the clock and active penalties before starting. Existing events will not change."
+      : "Keep the physical scoreboard paused. Its clock and period will become authoritative. Verify them and the active penalties before resuming. Existing events will not change.", [
+      { text: "Cancel", style: "cancel" },
+      { text: to === "clock" ? "Use Tablet Clock" : "Use Scoreboard", onPress: () => {
+        if (stageRef.current !== "gameDashboard" || gameModeRef.current !== from || !canRecoverClockSource(from, to, !clockRunningRef.current)) {
+          Alert.alert("Recovery Cancelled", "The clock source or running state changed. Pause and try again.");
+          return;
+        }
+        const currentSession = sessionRef.current;
+        if (!currentSession) return;
+        gameClock.pause();
+        setIsClockRunning(false);
+        clearScheduledScoreboardReconnect();
+        disconnectScoreboardSocket();
+        gameModeRef.current = to;
+        const recovered = lockSessionGameMode({ ...currentSession, gameMode: to }, to === "scoreboard");
+        setSession(recovered);
+        setScoreboardGatewaySettings((prev) => ({ ...prev, enabled: to === "scoreboard" }));
+        setShowScoreboardSettingsModal(false);
+        void persistActiveGameSnapshot(buildActiveGameSnapshot(recovered, recoveryGame));
+      } },
+    ]);
   }
 
   useEffect(() => {
@@ -2800,7 +2968,7 @@ export default function App() {
 
   useEffect(() => {
     const shouldConnect =
-      stage === "gameDashboard" && scoreboardGatewaySettings.enabled;
+      stage === "gameDashboard" && gameMode === "scoreboard" && scoreboardGatewaySettings.enabled;
 
     if (!shouldConnect) {
       clearScheduledScoreboardReconnect();
@@ -2980,10 +3148,11 @@ export default function App() {
     scoreboardGatewaySettings.port,
     scoreboardGatewaySettings.tokenSecret,
     scoreboardReconnectNonce,
+    gameMode,
   ]);
 
   useEffect(() => {
-    if (!session || stage !== "gameDashboard") {
+    if (!session || stage !== "gameDashboard" || gameMode !== "clock") {
       return;
     }
 
@@ -2998,11 +3167,12 @@ export default function App() {
 
       return () => clearInterval(timer);
     }
-  }, [session, stage, periodController.state, updateSession]);
+  }, [session, stage, periodController.state, updateSession, gameMode]);
 
   useEffect(() => {
     if (
       !session ||
+      gameMode !== "clock" ||
       stage !== "gameDashboard" ||
       periodController.state === "INTERMISSION" ||
       isScoreboardClockSyncActive
@@ -3019,10 +3189,11 @@ export default function App() {
     periodController.state,
     gameClock.displayTime,
     isScoreboardClockSyncActive,
+    gameMode,
   ]);
 
   useEffect(() => {
-    if (!session || stage !== "gameDashboard") return;
+    if (!session || stage !== "gameDashboard" || isBasicMode) return;
 
     const periodDurationMs =
       getPeriodLengthMinutes(session.periodLength) * 60 * 1000;
@@ -3038,6 +3209,7 @@ export default function App() {
     session?.periodLength,
     isClockRunning,
     isScoreboardClockSyncActive,
+    isBasicMode,
   ]);
 
   useEffect(() => {
@@ -3052,6 +3224,7 @@ export default function App() {
     penaltyClockPrevRemainingMsRef.current = currentRemainingMs;
 
     if (
+      isBasicMode ||
       !isClockRunning ||
       !gameClock.isRunning ||
       isAnyModalOpen ||
@@ -3094,9 +3267,15 @@ export default function App() {
     gameClock.isRunning,
     isClockRunning,
     isAnyModalOpen,
+    isBasicMode,
   ]);
 
   useEffect(() => {
+    if (isBasicMode || (gameMode === "scoreboard" && !isScoreboardClockSyncActive)) {
+      gameClock.pause();
+      setIsClockRunning(false);
+      return;
+    }
     if (stage !== "gameDashboard" || periodController.state !== "IN_PROGRESS") {
       return;
     }
@@ -3130,6 +3309,7 @@ export default function App() {
     isRunningTimeEventModalOpen,
     gameClock.isRunning,
     isScoreboardClockSyncActive,
+    gameMode,
   ]);
 
   useEffect(() => {
@@ -3426,7 +3606,7 @@ export default function App() {
       : [];
 
     setSession({
-      ...snapshot.session,
+      ...lockSessionGameMode(snapshot.session, snapshot.nextGame?.gatewayAvailable ?? scoreboardGatewaySettings.enabled),
       code: accessCode,
       apiBase: activeApiBase,
     });
@@ -3841,21 +4021,24 @@ export default function App() {
     awayStarterIds: string[],
   ) {
     try {
-      await fetch(`${activeApiBase}/games/${gameId}/live-status`, {
+      const response = await fetch(`${activeApiBase}/games/${gameId}/live-status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          homeOnPowerPlay: homeOnPP,
-          awayOnPowerPlay: awayOnPP,
+          gameMode,
+          clockTrackingAvailable: gameMode === "clock" || (gameMode === "scoreboard" && scoreboardConnectionState === "connected"),
+          homeOnPowerPlay: isBasicMode ? false : homeOnPP,
+          awayOnPowerPlay: isBasicMode ? false : awayOnPP,
           currentPeriod: session?.period ?? 1,
-          homeSkatersOnIce: homeSkatersCount,
-          awaySkatersOnIce: awaySkatersCount,
+          homeSkatersOnIce: isBasicMode ? null : homeSkatersCount,
+          awaySkatersOnIce: isBasicMode ? null : awaySkatersCount,
           homeStarterIds,
           awayStarterIds,
         }),
       });
-    } catch {
-      // Non-critical; GameView falls back to penalty-history inference.
+      if (!response.ok) throw new Error(`Live status sync failed (${response.status}).`);
+    } catch (error) {
+      trace("live-status.sync.failed", { gameId, message: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -4331,9 +4514,9 @@ export default function App() {
       scoringTeamId: teamId,
       scoringTeamName: teamName,
       period: session.period,
-      clockRemaining: session.clock,
-      timeInPeriod: elapsed,
-      strength: getDefaultGoalType(teamId),
+      clockRemaining: isBasicMode ? "" : session.clock,
+      timeInPeriod: isBasicMode ? "" : elapsed,
+      strength: isBasicMode ? "Even Strength" : getDefaultGoalType(teamId),
       scorerId: "",
       assist1Id: "",
       assist2Id: "",
@@ -4348,6 +4531,13 @@ export default function App() {
 
   async function saveGoalEvent() {
     if (!session || !goalModal || !nextGame?.gameId) return;
+    const elapsed = isBasicMode
+      ? basicEventElapsedTime(getPeriodLengthMinutes(session.periodLength), goalModal.clockRemaining)
+      : goalModal.timeInPeriod;
+    if (isBasicMode && (!elapsed || !Number.isInteger(goalModal.period) || goalModal.period < 1)) {
+      setGoalModalError("Enter a valid period and clock time remaining (MM:SS) within the period length.");
+      return;
+    }
     if (!goalModal.scorerId) {
       setGoalModalError("Goal scorer is required.");
       return;
@@ -4366,7 +4556,7 @@ export default function App() {
       assist2Id: goalModal.assist2Id || undefined,
       assist2Name: findPlayerName(goalModal.scoringTeamId, goalModal.assist2Id),
       period: goalModal.period,
-      timeInPeriod: goalModal.timeInPeriod,
+      timeInPeriod: elapsed!,
       strength: goalModal.strength,
       createdAtIso: new Date().toISOString(),
     };
@@ -4377,6 +4567,7 @@ export default function App() {
       goalModal.scoringTeamId === homeTeamId ? "home" : "away",
       1,
       false,
+      { period: goalModal.period, timeInPeriod: elapsed! },
     );
     autoReturnPulledGoalieIfNeeded(goalModal.scoringTeamId);
 
@@ -4385,7 +4576,7 @@ export default function App() {
     const defendingSkaters = isHomeScoring
       ? awaySkatersOnIce
       : homeSkatersOnIce;
-    if (scoringSkaters > defendingSkaters) {
+    if (!isBasicMode && scoringSkaters > defendingSkaters) {
       expireMinorOnPowerPlayGoal(goalModal.scoringTeamId);
     }
 
@@ -4477,8 +4668,8 @@ export default function App() {
       penalizedTeamId: teamId,
       penalizedTeamName: teamName,
       period: session.period,
-      clockRemaining: session.clock,
-      timeInPeriod: elapsed,
+      clockRemaining: isBasicMode ? "" : session.clock,
+      timeInPeriod: isBasicMode ? "" : elapsed,
       playerId: "",
       infraction: QUICK_PICK_INFRACTIONS[0],
       durationMinutes: getPenaltyDurationMinutes("Minor"),
@@ -4493,7 +4684,7 @@ export default function App() {
   }
 
   function openSetEditClockModal() {
-    if (!session || !canControlGame(session.role)) return;
+    if (!session || gameMode !== "clock" || !canControlGame(session.role)) return;
     if (isClockRunning) return;
 
     setClockModalMinutes(Math.floor(parseClockToSeconds(session.clock) / 60));
@@ -4732,7 +4923,14 @@ export default function App() {
   }
 
   async function savePenaltyEvent() {
-    if (!penaltyModal || !nextGame?.gameId) return;
+    if (!session || !penaltyModal || !nextGame?.gameId) return;
+    const elapsed = isBasicMode
+      ? basicEventElapsedTime(getPeriodLengthMinutes(session.periodLength), penaltyModal.clockRemaining)
+      : penaltyModal.timeInPeriod;
+    if (isBasicMode && (!elapsed || !Number.isInteger(penaltyModal.period) || penaltyModal.period < 1)) {
+      setPenaltyModalError("Enter a valid period and clock time remaining (MM:SS) within the period length.");
+      return;
+    }
     if (!penaltyModal.playerId) {
       setPenaltyModalError("Penalized player is required.");
       return;
@@ -4747,7 +4945,7 @@ export default function App() {
       normalizedPenaltyType === "Minor" ||
       normalizedPenaltyType === "Double Minor" ||
       normalizedPenaltyType === "Bench Minor";
-    const counterpartCoincidental = isMinorPenalty
+    const counterpartCoincidental = !isBasicMode && isMinorPenalty
       ? activePenalties.find(
           (penalty) =>
             penalty.teamId !== penaltyModal.penalizedTeamId &&
@@ -4778,7 +4976,7 @@ export default function App() {
       requiresRefereeNotes: shouldRequireRefereeNotes(normalizedPenaltyType),
       reviewRequired: shouldRequireSuspensionReview(normalizedPenaltyType),
       period: penaltyModal.period,
-      timeInPeriod: penaltyModal.timeInPeriod,
+      timeInPeriod: elapsed!,
       strength: "Even Strength",
       coincidental: Boolean(counterpartCoincidental),
       createdAtIso: new Date().toISOString(),
@@ -4808,7 +5006,7 @@ export default function App() {
         (prev[penaltyModal.penalizedTeamId] ?? 0) + 1,
     }));
 
-    setActivePenalties((prev) => {
+    if (!isBasicMode) setActivePenalties((prev) => {
       const newPenalty: ActivePenalty = {
         id: penaltyEvent.localId,
         teamId: penaltyModal.penalizedTeamId,
@@ -4860,7 +5058,7 @@ export default function App() {
   }
 
   function handleClockToggle() {
-    if (!session || !canControlGame(session.role) || isAnyModalOpen) return;
+    if (!session || gameMode !== "clock" || !canControlGame(session.role) || isAnyModalOpen) return;
 
     if (periodController.state === "NOT_STARTED") {
       setPeriodController((prev) => ({ ...prev, state: "IN_PROGRESS" }));
@@ -4909,6 +5107,19 @@ export default function App() {
 
   function handlePeriodControlButtonPress() {
     if (!session || !canControlGame(session.role) || isAnyModalOpen) return;
+    if (isBasicMode) {
+      setActiveDropdown({
+        title: "Period",
+        selectedValue: String(session.period),
+        options: [1, 2, 3, 4, 5, 6].map((period) => ({ value: String(period), label: period <= 3 ? `Period ${period}` : `OT ${period - 3}` })),
+        onSelect: (value) => {
+          const period = Number(value);
+          updateSession({ period });
+          setPeriodController({ state: "IN_PROGRESS", isOvertime: period >= 4 });
+        },
+      });
+      return;
+    }
     if (periodController.state === "INTERMISSION") {
       setShowResumeVerify(true);
     }
@@ -6455,7 +6666,7 @@ export default function App() {
         if (activeGame.nextGame?.gameId === resumeSnapshot.nextGame.gameId) {
           setRestoreStatus("restored-resume");
           setSession({
-            ...resumeSnapshot.session,
+            ...lockSessionGameMode(resumeSnapshot.session, resumeSnapshot.nextGame?.gatewayAvailable ?? scoreboardGatewaySettings.enabled),
             code: accessCode,
             apiBase: activeApiBase,
           });
@@ -6642,14 +6853,16 @@ export default function App() {
     team: "home" | "away",
     delta: 1 | -1,
     recordShotEvent = true,
+    eventTime?: { period: number; timeInPeriod: string },
   ) {
     if (!session || !canControlGame(session.role)) return;
+    const eventPeriod = eventTime?.period ?? session.period;
     const transitioned = transitionShotTotals(
       homeShotsByPeriod,
       awayShotsByPeriod,
       {
         team,
-        period: session.period,
+        period: eventPeriod,
         delta,
       },
     );
@@ -6670,7 +6883,7 @@ export default function App() {
         ? findPlayerName(goalieTeamId, goalieId)
         : "Unknown Goalie";
 
-    if (recordShotEvent && nextGame?.gameId) {
+    if (!isBasicMode && recordShotEvent && nextGame?.gameId) {
       if (delta === 1) {
         const periodLengthMinutes = getPeriodLengthMinutes(
           session.periodLength,
@@ -6681,8 +6894,8 @@ export default function App() {
           eventType: "Shot",
           teamId: shootingTeamId,
           teamName: shootingTeamName,
-          period: session.period,
-          timeInPeriod: computeElapsedTime(periodLengthMinutes, session.clock),
+          period: eventPeriod,
+          timeInPeriod: eventTime?.timeInPeriod ?? computeElapsedTime(periodLengthMinutes, session.clock),
           strength: "Even Strength",
           createdAtIso: new Date().toISOString(),
         };
@@ -6724,7 +6937,7 @@ export default function App() {
         goalieTeamName,
         goalieId,
         goalieName,
-        period: session.period,
+        period: eventPeriod,
         delta,
         createdAtIso: new Date().toISOString(),
       },
@@ -7285,6 +7498,12 @@ export default function App() {
       return;
     }
 
+    if (!session.gameModeConfirmed && !isGameModeLocked) {
+      setOfficialsError("Select and confirm the Game Mode on Verify Game before starting.");
+      setShowStartConfirm(false);
+      return;
+    }
+
     if (!officials.length) {
       setOfficialsError("No officials are assigned to this game.");
       setShowStartConfirm(false);
@@ -7305,6 +7524,8 @@ export default function App() {
     setOfficialsError("");
     setShowStartConfirm(false);
     setIsOfficialsLoading(true);
+    const lockedSession = lockSessionGameMode(session, scoreboardGatewaySettings.enabled);
+    setSession(lockedSession);
 
     try {
       await saveOfficialsForGame(nextGame.gameId, officials);
@@ -7337,7 +7558,7 @@ export default function App() {
 
       setGameHasEnded(false);
       const startedSession: SessionState = {
-        ...session,
+        ...lockedSession,
         clock: formatSecondsToClock(
           getPeriodLengthMinutes(session.periodLength) * 60,
         ),
@@ -7495,6 +7716,28 @@ export default function App() {
         {stage === "verifyGame" && session ? (
           <View style={styles.card}>
             <Text style={styles.title}>Verify Game</Text>
+            <Text style={styles.sectionLabel}>GAME MODE</Text>
+            {isGameModeLocked ? <Text style={styles.cellValue}>{gameMode === "basic" ? "Basic" : gameMode === "clock" ? "Clock" : "Scoreboard"} (Locked)</Text> : (
+              <View style={styles.rowButtons} accessibilityRole="radiogroup">
+                {(["basic", "clock", "scoreboard"] as GameMode[]).map((mode) => {
+                  const selected = session.gameModeConfirmed && gameMode === mode;
+                  return <Pressable
+                    key={mode}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: Boolean(selected), disabled: !canEditVerifyGame(session.role) }}
+                    style={[selected ? styles.primaryButton : styles.secondaryButton, !canEditVerifyGame(session.role) && styles.disabledButton]}
+                    disabled={!canEditVerifyGame(session.role)}
+                    onPress={() => selectVerifiedGameMode(mode)}
+                  >
+                    <Text style={selected ? styles.primaryButtonText : styles.secondaryButtonText}>{mode === "basic" ? "Basic" : mode === "clock" ? "Clock" : "Scoreboard"}</Text>
+                  </Pressable>;
+                })}
+              </View>
+            )}
+            {!session.gameModeConfirmed && !isGameModeLocked ? <Text style={styles.error}>Select a Game Mode before continuing.</Text> : null}
+            <Pressable style={styles.secondaryButton} onPress={openScoreboardSettingsModal}>
+              <Text style={styles.secondaryButtonText}>Gateway Settings</Text>
+            </Pressable>
             <Text style={styles.sectionLabel}>TEAMS</Text>
             <View style={styles.twoColRow}>
               <View style={styles.twoColCell}>
@@ -7594,7 +7837,7 @@ export default function App() {
               </Pressable>
               <Pressable
                 style={styles.primaryButton}
-                onPress={() => setStage("rosterVerify")}
+                onPress={confirmGameVerification}
               >
                 <Text style={styles.primaryButtonText}>
                   Confirm and Next to Verify Rosters
@@ -8421,7 +8664,7 @@ export default function App() {
               <View style={styles.goalModal}>
                 <Text style={styles.goalModalTitle}>Goal Event</Text>
                 <Text style={styles.goalModalSubtitle}>
-                  {isRunningTimeActive
+                  {isBasicMode ? goalModal.scoringTeamName : isRunningTimeActive
                     ? "Running time active. The game clock will continue."
                     : "Clock paused. Capture goal details to continue."}
                 </Text>
@@ -8430,7 +8673,12 @@ export default function App() {
                   <Text style={styles.error}>{goalModalError}</Text>
                 ) : null}
 
-                <View style={styles.goalLockedGrid}>
+                {isBasicMode ? <BasicEventTimeFields
+                  period={goalModal.period}
+                  clockRemaining={goalModal.clockRemaining}
+                  onPeriodChange={(period) => setGoalModal((prev) => prev ? { ...prev, period } : prev)}
+                  onClockChange={(clockRemaining) => setGoalModal((prev) => prev ? { ...prev, clockRemaining } : prev)}
+                /> : <View style={styles.goalLockedGrid}>
                   <View style={styles.goalLockedItem}>
                     <Text style={styles.goalLockedLabel}>Scoring Team</Text>
                     <Text style={styles.goalLockedValue}>
@@ -8455,7 +8703,7 @@ export default function App() {
                       {goalModal.clockRemaining}
                     </Text>
                   </View>
-                </View>
+                </View>}
 
                 <Text style={styles.sectionLabel}>GOAL SCORER</Text>
                 <Pressable
@@ -10266,7 +10514,7 @@ export default function App() {
               <View style={styles.goalModal}>
                 <Text style={styles.goalModalTitle}>Penalty Event</Text>
                 <Text style={styles.goalModalSubtitle}>
-                  {isRunningTimeActive
+                  {isBasicMode ? penaltyModal.penalizedTeamName : isRunningTimeActive
                     ? "Running time active. The game clock will continue."
                     : "Clock paused. Capture penalty details to continue."}
                 </Text>
@@ -10275,7 +10523,12 @@ export default function App() {
                   <Text style={styles.error}>{penaltyModalError}</Text>
                 ) : null}
 
-                <View style={styles.goalLockedGrid}>
+                {isBasicMode ? <BasicEventTimeFields
+                  period={penaltyModal.period}
+                  clockRemaining={penaltyModal.clockRemaining}
+                  onPeriodChange={(period) => setPenaltyModal((prev) => prev ? { ...prev, period } : prev)}
+                  onClockChange={(clockRemaining) => setPenaltyModal((prev) => prev ? { ...prev, clockRemaining } : prev)}
+                /> : <View style={styles.goalLockedGrid}>
                   <View style={styles.goalLockedItem}>
                     <Text style={styles.goalLockedLabel}>Penalized Team</Text>
                     <Text style={styles.goalLockedValue}>
@@ -10300,7 +10553,7 @@ export default function App() {
                       {penaltyModal.clockRemaining}
                     </Text>
                   </View>
-                </View>
+                </View>}
 
                 <Text style={styles.sectionLabel}>PENALIZED PLAYER</Text>
                 <Pressable
@@ -10565,29 +10818,18 @@ export default function App() {
           >
             <View style={styles.confirmOverlay}>
               <View style={styles.goalModal}>
-                <Text style={styles.goalModalTitle}>Scoreboard Settings</Text>
-                <Text style={styles.goalModalSubtitle}>
-                  Read-only websocket connection to TipIn Gateway (no clock
-                  control).
-                </Text>
+                <Text style={styles.goalModalTitle}>Game Manager Settings</Text>
+                <Text style={styles.sectionLabel}>GAME MODE</Text>
+                <Text style={styles.cellValue}>{gameMode === "basic" ? "Basic" : gameMode === "clock" ? "Clock" : "Scoreboard"}{isGameModeLocked ? " (Locked)" : " (Select on Verify Game)"}</Text>
 
                 <View style={styles.toggleRow}>
-                  <Text style={styles.toggleLabel}>
-                    Connect to Scoreboard:{" "}
-                    {scoreboardSettingsDraft.enabled ? "On" : "Off"}
-                  </Text>
+                  <Text style={styles.toggleLabel}>Connect to Scoreboard: {scoreboardSettingsDraft.enabled ? "On" : "Off"}</Text>
                   <Switch
+                    accessibilityLabel="Connect to Scoreboard"
                     value={scoreboardSettingsDraft.enabled}
-                    onValueChange={(value) =>
-                      setScoreboardSettingsDraft((prev) => ({
-                        ...prev,
-                        enabled: value,
-                      }))
-                    }
+                    onValueChange={(enabled) => setScoreboardSettingsDraft((prev) => ({ ...prev, enabled }))}
                     trackColor={{ false: "#516273", true: "#2f9fe8" }}
-                    thumbColor={
-                      scoreboardSettingsDraft.enabled ? "#dff2ff" : "#d4dbe3"
-                    }
+                    thumbColor={scoreboardSettingsDraft.enabled ? "#dff2ff" : "#d4dbe3"}
                   />
                 </View>
 
@@ -10665,7 +10907,14 @@ export default function App() {
                 <Text style={styles.footerHint}>
                   Connection status: {scoreboardConnectionMessage}
                 </Text>
-
+                {stage === "gameDashboard" && !isBasicMode && !gameHasEnded ? <>
+                  <Pressable
+                    style={[styles.secondaryButton, (isClockRunning || gameClock.isRunning || !canControlGame(session?.role ?? "CA")) && styles.disabledButton]}
+                    disabled={isClockRunning || gameClock.isRunning || !canControlGame(session?.role ?? "CA")}
+                    onPress={requestClockSourceRecovery}
+                  ><Text style={styles.secondaryButtonText}>Clock Source Recovery: {gameMode === "scoreboard" ? "Use Tablet Clock" : "Use Scoreboard"}</Text></Pressable>
+                  {isClockRunning || gameClock.isRunning ? <Text style={styles.footerHint}>Pause the clock before source recovery.</Text> : null}
+                </> : null}
                 <View style={styles.rowButtons}>
                   <Pressable
                     style={styles.secondaryButton}
@@ -10840,6 +11089,7 @@ export default function App() {
                 <View style={styles.scoreboardStatusBadges}>
                   <Pressable
                     style={styles.scoreboardSettingsButton}
+                    accessibilityLabel="Game Manager Settings"
                     onPress={openScoreboardSettingsModal}
                   >
                     <Text style={styles.scoreboardSettingsButtonText}>⚙</Text>
@@ -10850,7 +11100,7 @@ export default function App() {
                       scoreboardConnectionBadgeStyle,
                     ]}
                     onPress={requestScoreboardReconnect}
-                    disabled={!scoreboardGatewaySettings.enabled}
+                    disabled={gameMode !== "scoreboard" || !scoreboardGatewaySettings.enabled}
                   >
                     <Text
                       style={[
@@ -10880,10 +11130,10 @@ export default function App() {
               </View>
             </View>
 
-            <Text style={styles.sectionLabel}>GAME CLOCK</Text>
+            <Text style={styles.sectionLabel}>{isBasicMode ? "BASIC MODE" : "GAME CLOCK"}</Text>
             <View style={styles.gameClockShell}>
               <View style={styles.gameClockBody}>
-                <View style={styles.penaltySide}>
+                {!isBasicMode ? <View style={styles.penaltySide}>
                   <Text style={styles.penaltySideLabel}>
                     {session.homeTeam}
                   </Text>
@@ -10924,26 +11174,26 @@ export default function App() {
                       </View>
                     ))
                   )}
-                </View>
+                </View> : null}
 
                 <View style={styles.gameClockCenterStack}>
                   <View style={styles.gameClockCenter}>
                     <Text style={styles.gameClockPeriod}>
                       {periodDotIndicator} {activePeriodLabel} Period
                     </Text>
-                    <Text style={styles.gameClockTime}>{session.clock}</Text>
+                    <Text style={styles.gameClockTime}>{isBasicMode ? "--:--" : session.clock}</Text>
                     <View style={styles.gameClockModeBadge}>
                       <Text style={styles.gameClockModeText}>
-                        {isClockRunning ? "Running" : "Stopped"} •{" "}
+                        {isBasicMode ? "Manual Event Time" : isClockRunning ? "Running" : "Stopped"} •{" "}
                         {clockSourceLabel}
                       </Text>
                     </View>
-                    <Text style={styles.gameClockManpowerText}>
+                    {!isBasicMode ? <Text style={styles.gameClockManpowerText}>
                       {homeSkatersOnIce}v{awaySkatersOnIce} • {powerPlayLabel}
-                    </Text>
+                    </Text> : null}
                   </View>
 
-                  <View style={styles.clockPrimaryButtons}>
+                  {gameMode === "clock" ? <View style={styles.clockPrimaryButtons}>
                     <Pressable
                       style={[
                         isClockRunning
@@ -10959,7 +11209,7 @@ export default function App() {
                         {isClockRunning ? "Stop Clock" : "Start Clock"}
                       </Text>
                     </Pressable>
-                  </View>
+                  </View> : null}
 
                   <Pressable
                     style={[
@@ -10974,7 +11224,7 @@ export default function App() {
                     onPress={handlePeriodControlButtonPress}
                   >
                     <Text style={styles.clockStatusText}>
-                      {periodController.state === "NOT_STARTED"
+                      {isBasicMode ? "Select Period" : periodController.state === "NOT_STARTED"
                         ? "Period: Not Started"
                         : periodController.state === "IN_PROGRESS"
                           ? "Period: In Progress"
@@ -10982,15 +11232,15 @@ export default function App() {
                     </Text>
                   </Pressable>
 
-                  <View style={styles.clockSecondaryButtons}>
+                  {!isBasicMode ? <View style={styles.clockSecondaryButtons}>
                     <Pressable
                       style={[
                         styles.clockSecondaryBtn,
                         styles.clockHalfWidthBtn,
-                        (isAnyModalOpen || isClockRunning) &&
+                        (gameMode !== "clock" || isAnyModalOpen || isClockRunning) &&
                           styles.disabledButton,
                       ]}
-                      disabled={isAnyModalOpen || isClockRunning}
+                      disabled={gameMode !== "clock" || isAnyModalOpen || isClockRunning}
                       onPress={openSetEditClockModal}
                     >
                       <Text style={styles.clockSecondaryText}>
@@ -11009,7 +11259,7 @@ export default function App() {
                     >
                       <Text style={styles.clockSecondaryText}>Timeout</Text>
                     </Pressable>
-                  </View>
+                  </View> : null}
 
                   <View style={styles.clockGoalieButtons}>
                     <Pressable
@@ -11043,7 +11293,7 @@ export default function App() {
                   </View>
                 </View>
 
-                <View style={styles.penaltySide}>
+                {!isBasicMode ? <View style={styles.penaltySide}>
                   <Text style={styles.penaltySideLabel}>
                     {session.awayTeam}
                   </Text>
@@ -11084,7 +11334,7 @@ export default function App() {
                       </View>
                     ))
                   )}
-                </View>
+                </View> : null}
               </View>
 
               <Text style={styles.clockPenaltySummaryText}>
