@@ -226,6 +226,9 @@ namespace TipInAPI.Functions
                     goal.Strength,
                 }),
                     CurrentPeriod = liveStatus?.CurrentPeriod,
+                GameMode = liveStatus?.GameMode,
+                ClockTrackingAvailable = liveStatus?.ClockTrackingAvailable,
+                ManpowerTrackingAvailable = liveStatus?.GameMode == null ? (bool?)null : liveStatus.GameMode != "basic",
                 Penalties = report.Penalties.Select((penalty, index) => new
                 {
                     EventId = $"penalty-{index + 1}",
@@ -247,10 +250,10 @@ namespace TipInAPI.Functions
                 AwayShotsP3 = report.AwayShots.P3,
                 AwayShotsOT = report.AwayShots.OT,
                 AwayShots = report.AwayShots.Total,
-                liveStatus.HomeOnPowerPlay,
-                liveStatus.AwayOnPowerPlay,
-                liveStatus.HomeSkatersOnIce,
-                liveStatus.AwaySkatersOnIce,
+                HomeOnPowerPlay = liveStatus.GameMode == "basic" ? null : liveStatus.HomeOnPowerPlay,
+                AwayOnPowerPlay = liveStatus.GameMode == "basic" ? null : liveStatus.AwayOnPowerPlay,
+                HomeSkatersOnIce = liveStatus.GameMode == "basic" ? null : liveStatus.HomeSkatersOnIce,
+                AwaySkatersOnIce = liveStatus.GameMode == "basic" ? null : liveStatus.AwaySkatersOnIce,
             });
             return response;
         }
@@ -537,8 +540,15 @@ namespace TipInAPI.Functions
 
             try
             {
+                var hasModeColumns = conn.ExecuteScalar<bool>(@"
+                    SELECT CAST(CASE WHEN COL_LENGTH('dbo.GameLiveStatus', 'GameMode') IS NOT NULL
+                        AND COL_LENGTH('dbo.GameLiveStatus', 'ClockTrackingAvailable') IS NOT NULL
+                        THEN 1 ELSE 0 END AS bit);");
+                var modeColumns = hasModeColumns
+                    ? ", GameMode, ClockTrackingAvailable"
+                    : ", CAST(NULL AS nvarchar(16)) AS GameMode, CAST(NULL AS bit) AS ClockTrackingAvailable";
                 return await conn.QueryFirstOrDefaultAsync<PublicLiveStatusRow>(
-                           "SELECT HomeOnPowerPlay, AwayOnPowerPlay, CurrentPeriod, HomeSkatersOnIce, AwaySkatersOnIce, HomeStartersJson, AwayStartersJson FROM dbo.GameLiveStatus WHERE GameId = @GameId;",
+                           $"SELECT HomeOnPowerPlay, AwayOnPowerPlay, CurrentPeriod, HomeSkatersOnIce, AwaySkatersOnIce, HomeStartersJson, AwayStartersJson{modeColumns} FROM dbo.GameLiveStatus WHERE GameId = @GameId;",
                            new { GameId = gameId })
                        ?? new PublicLiveStatusRow();
             }
@@ -670,6 +680,8 @@ namespace TipInAPI.Functions
 
         private sealed class PublicLiveStatusRow
         {
+            public string? GameMode { get; set; }
+            public bool? ClockTrackingAvailable { get; set; }
             public bool? HomeOnPowerPlay { get; set; }
             public bool? AwayOnPowerPlay { get; set; }
             public int? HomeSkatersOnIce { get; set; }

@@ -155,6 +155,9 @@ export interface ApiSummaryShot {
 
 export interface ApiGameSummary {
   gameId: string;
+  gameMode?: string;
+  clockTrackingAvailable?: boolean;
+  manpowerTrackingAvailable?: boolean;
   currentPeriod?: number;
   goals: ApiSummaryGoal[];
   penalties: ApiSummaryPenalty[];
