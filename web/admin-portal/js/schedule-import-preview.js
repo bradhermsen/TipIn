@@ -1275,11 +1275,12 @@ function goBoundGameDateTimeKey(value) {
 function buildGoBoundGameImportPlan() {
   const entries = [];
   const problems = [];
+  const skipped = [];
   const seen = new Set();
   goBoundPreviewState.previewRows.forEach((row, index) => {
     if (!isGoBoundTeamIncluded(row.opponent, row.teamType, row.levelName)) return;
     if (!row.ready) {
-      problems.push(`Row ${index + 1}: ${row.problems.join("; ")}`);
+      skipped.push(`Row ${index + 1}: ${row.problems.join("; ")}`);
       return;
     }
 
@@ -1334,7 +1335,7 @@ function buildGoBoundGameImportPlan() {
       },
     });
   });
-  return { entries, problems };
+  return { entries, problems, skipped };
 }
 
 function updateGoBoundGameImportButton() {
@@ -1345,9 +1346,9 @@ function updateGoBoundGameImportButton() {
   const canImport = Auth.hasRole(window.ROLES.SuperAdmin, window.ROLES.OrgAdmin, window.ROLES.OrgOwner);
   button.disabled = !canImport || !plan.entries.length || plan.problems.length > 0 || goBoundPreviewState.gamesImported;
   if (!canImport) messages.textContent = "A SuperAdmin, OrgAdmin, or OrgOwner is required to import Games.";
-  else if (plan.problems.length) messages.textContent = `Resolve ${plan.problems.length} schedule or venue issue${plan.problems.length === 1 ? "" : "s"} before importing Games.`;
+  else if (plan.problems.length) messages.textContent = `Resolve ${plan.problems.length} schedule or venue issue${plan.problems.length === 1 ? "" : "s"} before importing Games. ${[...new Set(plan.problems.map((problem) => problem.replace(/^Row \d+: /, "")))].join(" | ")} (first: ${plan.problems[0]})`;
   else if (goBoundPreviewState.gamesImported) messages.textContent = "This CSV import completed. Matching Games will be skipped if you reload and retry.";
-  else if (plan.entries.length) messages.textContent = `${plan.entries.length} reviewed Games are ready. Existing matching Games will be skipped.`;
+  else if (plan.entries.length) messages.textContent = `${plan.entries.length} reviewed Games are ready${plan.skipped.length ? `; ${plan.skipped.length} unreadable row${plan.skipped.length === 1 ? "" : "s"} will be skipped` : ""}. Existing matching Games will be skipped.`;
   else messages.textContent = "Preview a GoBound CSV to prepare Games for import.";
 }
 
