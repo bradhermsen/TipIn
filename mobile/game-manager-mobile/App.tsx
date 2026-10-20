@@ -489,7 +489,12 @@ type ActiveGameResume = {
   timestampIso: string;
 };
 
-const DEFAULT_PUBLIC_API_BASE = "https://api-dev.tipinscoring.com/api";
+const PROD_API_BASE = "https://func-tipin-api-prod-cus-01.azurewebsites.net/api";
+// Set per EAS build profile; falls back to prod so a missing variable never targets Dev.
+const DEFAULT_PUBLIC_API_BASE = (
+  process.env.EXPO_PUBLIC_API_BASE || PROD_API_BASE
+).replace(/\/+$/, "");
+const IS_PROD_API = DEFAULT_PUBLIC_API_BASE === PROD_API_BASE;
 
 function isValidEmailAddress(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -7598,6 +7603,12 @@ export default function App() {
     <SafeAreaView style={styles.root}>
       <StatusBar style="light" />
 
+      {!IS_PROD_API ? (
+        <View style={styles.envBanner}>
+          <Text style={styles.envBannerText}>DEV ENVIRONMENT - not live data</Text>
+        </View>
+      ) : null}
+
       {stage !== "login" ? (
         <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
@@ -12449,6 +12460,17 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  envBanner: {
+    backgroundColor: "#C2410C",
+    paddingVertical: 3,
+    alignItems: "center",
+  },
+  envBannerText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
   root: {
     flex: 1,
     backgroundColor: "#0B1424",
