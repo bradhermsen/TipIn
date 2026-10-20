@@ -1088,6 +1088,19 @@ body,
   justify-content: space-between;
 }
 
+.game-view-managed-badge {
+  float: right;
+  height: 36px;
+  margin-left: 8px;
+  object-fit: contain;
+  width: 36px;
+}
+.game-view-next-card-top .game-view-managed-badge {
+  float: none;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
 .game-view-card-eyebrow {
   font-size: 0.78rem;
   font-weight: 700;

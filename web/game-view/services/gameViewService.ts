@@ -371,6 +371,7 @@ export async function fetchNextGamesByTeam(
         isLive: isLiveStatus(status),
         homeScore,
         awayScore,
+        isTipInManaged: Boolean(game.isTipInManaged),
       } satisfies NextGameCardModel;
     }),
   );
@@ -426,6 +427,7 @@ export async function fetchUpcomingSchedule(
         teamMap.get(String(game.awayTeamId || ""))?.teamMascot || null,
       ),
       gameId: String(game.gameId),
+      isTipInManaged: Boolean(game.isTipInManaged),
       startTimeIso: new Date(game.gameDateTime).toISOString(),
       matchupLabel: buildMatchupLabel(
         displayTeamNameWithMascot(
@@ -516,6 +518,7 @@ export async function fetchLastFinalGamesByTeam(
 
       return {
         gameId: String(game.gameId),
+        isTipInManaged: Boolean(game.isTipInManaged),
         homeTeamName: homeDisplay,
         awayTeamName: awayDisplay,
         matchupLabel: buildMatchupLabel(

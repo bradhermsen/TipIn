@@ -160,6 +160,7 @@ function normalizeGameListItem(row: unknown): ApiGameListItem {
     status: pickString(obj, "status", "Status") || "SCHEDULED",
     homeScore: pickOptionalNumber(obj, "homeScore", "HomeScore"),
     awayScore: pickOptionalNumber(obj, "awayScore", "AwayScore"),
+    isTipInManaged: pickBoolean(obj, "isTipInManaged", "IsTipInManaged"),
   };
 }
 

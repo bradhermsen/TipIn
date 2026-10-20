@@ -1,5 +1,6 @@
 import React from "react";
 import type { LastFinalGameItemModel } from "../types/gameView";
+import { ManagedBadge } from "./ManagedBadge";
 
 interface Props {
   games: LastFinalGameItemModel[];
@@ -31,6 +32,7 @@ export function LastFinalGamesCard({ games, onClick }: Props) {
                 className="game-view-schedule-card game-view-schedule-card-button"
                 onClick={() => onClick(game.gameId)}
               >
+                {game.isTipInManaged ? <ManagedBadge /> : null}
                 <p className="game-view-schedule-matchup">
                   {game.matchupLabel ||
                     `${game.awayTeamName} at ${game.homeTeamName}`}

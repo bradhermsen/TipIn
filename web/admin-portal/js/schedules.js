@@ -1176,6 +1176,7 @@ function renderGamesGrouped(list) {
                 <article class="schedule-game-card">
                   <div class="schedule-game-top">
                     <h4>${awayLabel} vs ${homeLabel}</h4>
+                    ${g.isTipInManaged ? '<img class="tipin-managed-badge" src="/assets/TipIn_Managed_Badge.png" alt="Managed by TipIn Game Manager" title="Managed by TipIn Game Manager" onerror="this.remove()" />' : ""}
                     <span class="schedule-status-badge">${statusLabel || statusKey}</span>
                   </div>
 

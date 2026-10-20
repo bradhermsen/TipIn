@@ -31,5 +31,7 @@ namespace TipInAPI.DTOs
         public int PeriodLengthMinutes { get; set; }
 
         public string Status { get; set; }
+
+        public bool IsTipInManaged { get; set; }
     }
 }

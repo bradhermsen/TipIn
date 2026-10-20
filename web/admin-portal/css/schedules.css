@@ -458,6 +458,14 @@
 .schedule-game-top h4 {
   margin: 0;
   font-size: 14px;
+  flex: 1;
+}
+
+.tipin-managed-badge {
+  height: 34px;
+  width: 34px;
+  object-fit: contain;
+  flex: none;
 }
 
 .schedule-status-badge {
