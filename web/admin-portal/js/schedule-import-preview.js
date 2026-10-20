@@ -220,18 +220,8 @@ function getOpponentMapping(opponentName, division, teamType) {
 }
 
 async function loadGoBoundPreviewLookups() {
-  if (goBoundPreviewState.teams.length && goBoundPreviewState.gameTypes.length) {
-    if (goBoundPreviewState.facilityCatalogError) {
-      try {
-        goBoundPreviewState.facilityCatalog = await FacilityApi.getCatalog();
-        goBoundPreviewState.facilityCatalogError = "";
-      } catch (error) {
-        goBoundPreviewState.facilityCatalogError = error.message || "Could not load managed venues.";
-      }
-    }
-    return;
-  }
-
+  // Always refetch so edits made since the last preview are reflected.
+  if (window.SeasonContext?.clear) window.SeasonContext.clear();
   const [teamsResponse, gameTypesResponse, organizationsResponse, leaguesResponse, levelsResponse, facilityCatalog] = await Promise.all([
     authFetch("/teams", { cache: "no-store" }),
     authFetch("/gametypes", { cache: "no-store" }),
@@ -824,8 +814,15 @@ function renderExternalOpponentSetup(rows) {
 
   list.innerHTML = proposals.map((proposal, index) => {
     const selection = proposalSelectionValue(proposal);
-    const existingOptions = proposal.organizationCandidates.map((organization) =>
-      `<option value="existing:${escapeGoBoundPreview(organization.organizationId)}" ${selection === `existing:${organization.organizationId}` ? "selected" : ""}>Use ${escapeGoBoundPreview(organization.name)} (${escapeGoBoundPreview(organization.organizationType)})</option>`,
+    const suggestedIds = new Set(proposal.organizationCandidates.map((organization) => String(organization.organizationId)));
+    const orderedOrganizations = [
+      ...proposal.organizationCandidates,
+      ...goBoundPreviewState.organizations
+        .filter((organization) => !suggestedIds.has(String(organization.organizationId)))
+        .sort((first, second) => String(first.name || "").localeCompare(String(second.name || ""))),
+    ];
+    const existingOptions = orderedOrganizations.map((organization) =>
+      `<option value="existing:${escapeGoBoundPreview(organization.organizationId)}" ${selection === `existing:${organization.organizationId}` ? "selected" : ""}>Use ${escapeGoBoundPreview(organization.name)} (${escapeGoBoundPreview(organization.organizationType || "External")})${suggestedIds.has(String(organization.organizationId)) ? " - suggested" : ""}</option>`,
     ).join("");
     const createOptionSelected = selection === "new";
     const requiresChoice = proposal.organizationCandidates.length > 1;
@@ -1441,9 +1438,11 @@ function initScheduleImportPreview() {
   openButton?.addEventListener("click", () => {
     panel.classList.remove("hidden");
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (fileInput) fileInput.value = "";
     fileInput?.click();
   });
   closeButton?.addEventListener("click", () => panel.classList.add("hidden"));
+  fileInput?.addEventListener("click", () => { fileInput.value = ""; });
   fileInput?.addEventListener("change", () => {
     const file = fileInput.files?.[0];
     if (file) previewGoBoundCsv(file);
