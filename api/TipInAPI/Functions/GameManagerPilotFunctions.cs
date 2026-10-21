@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Dapper;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
 using TipInAPI.Infrastructure.Database;
 using TipInAPI.Services;
 
@@ -15,12 +16,15 @@ namespace TipInAPI.Functions
     {
         private readonly ISqlConnectionFactory _connectionFactory;
         private readonly IEmailService _emailService;
+        private readonly ILogger<GameManagerPilotFunctions> _logger;
         private const string NotificationEmail = "info@tipinscoring.com";
 
-        public GameManagerPilotFunctions(ISqlConnectionFactory connectionFactory, IEmailService emailService)
+        public GameManagerPilotFunctions(ISqlConnectionFactory connectionFactory, IEmailService emailService,
+            ILogger<GameManagerPilotFunctions> logger)
         {
             _connectionFactory = connectionFactory;
             _emailService = emailService;
+            _logger = logger;
         }
 
         [Function("SubmitGameManagerPilotInterest")]
@@ -90,7 +94,8 @@ namespace TipInAPI.Functions
                     });
             }
 
-            if (recentSubmission?.NotificationSentAtUtc == null)
+            var notificationSent = recentSubmission?.NotificationSentAtUtc != null;
+            if (!notificationSent)
             {
                 try
                 {
@@ -100,6 +105,7 @@ namespace TipInAPI.Functions
                         Subject = $"TipIn Game Manager pilot interest — {payload.OrganizationName.Trim()}",
                         BodyText = BuildNotificationBody(payload, email)
                     });
+                    notificationSent = true;
                     await connection.ExecuteAsync(@"
                         UPDATE dbo.GameManagerPilotInterests
                         SET NotificationSentAtUtc = SYSUTCDATETIME(), NotificationError = NULL
@@ -107,6 +113,7 @@ namespace TipInAPI.Functions
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Pilot inquiry notification failed for submission {PilotInterestId}", pilotInterestId);
                     await connection.ExecuteAsync(@"
                         UPDATE dbo.GameManagerPilotInterests
                         SET NotificationError = @NotificationError
@@ -116,7 +123,13 @@ namespace TipInAPI.Functions
             }
 
             var response = req.CreateResponse(HttpStatusCode.Created);
-            await response.WriteAsJsonAsync(new { message = "Thanks. We received your pilot interest and will follow up." });
+            await response.WriteAsJsonAsync(new
+            {
+                notificationSent,
+                message = notificationSent
+                    ? "Thanks. We received your pilot interest and will follow up."
+                    : "Your request was saved, but the notification email could not be sent. Please try submitting again."
+            });
             return response;
         }
 
