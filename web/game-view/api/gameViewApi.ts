@@ -660,9 +660,12 @@ export async function submitGameManagerPilotInterest(
   const response = (await res.json().catch(() => ({}))) as {
     message?: string;
     error?: string;
+    notificationSent?: boolean;
   };
-  if (!res.ok)
+  if (!res.ok || response.error)
     throw new Error(response.error || "Unable to submit pilot interest.");
+  if (response.notificationSent === false)
+    throw new Error(response.message || "Your request was saved, but the notification email could not be sent.");
   return response.message || "Thanks. We received your pilot interest.";
 }
 
