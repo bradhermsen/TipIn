@@ -1,5 +1,6 @@
 import React from "react";
 import { GameDetailScreen } from "../screens/GameDetailScreen";
+import { GameViewContactScreen } from "../screens/GameViewContactScreen";
 import { GameManagerMarketingScreen } from "../screens/GameManagerMarketingScreen";
 import { GameViewMainScreen } from "../screens/GameViewMainScreen";
 
@@ -14,11 +15,17 @@ function showGameManagerMarketing() {
   );
 }
 
+function showContactPage() {
+  return new URLSearchParams(window.location.search).get("contact") === "1";
+}
+
 export function App() {
   return (
     <div className="tipin-site-shell">
       <div className="tipin-product-surface" data-product="gameview">
-        {showGameManagerMarketing() ? (
+        {showContactPage() ? (
+          <GameViewContactScreen />
+        ) : showGameManagerMarketing() ? (
           <GameManagerMarketingScreen />
         ) : hasGameIdInQuery() ? (
           <GameDetailScreen />

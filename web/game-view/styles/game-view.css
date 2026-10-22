@@ -57,6 +57,153 @@ body,
   margin: 0;
 }
 
+.game-view-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.game-view-footer-links a,
+.game-view-contact-email a,
+.game-view-contact-pilot a {
+  color: #9fc9ff;
+}
+
+.game-view-contact-root {
+  box-sizing: border-box;
+  color: #f2f6ff;
+  margin: 0 auto;
+  max-width: 720px;
+  min-height: 100vh;
+  padding: 32px 20px 16px;
+}
+
+.game-view-contact-header {
+  margin-bottom: 26px;
+}
+
+.game-view-contact-back {
+  color: #9fc9ff;
+  display: inline-block;
+  font-size: 0.85rem;
+  margin-bottom: 28px;
+}
+
+.game-view-contact-header h1 {
+  font-size: 2rem;
+  margin: 0 0 8px;
+}
+
+.game-view-contact-header p {
+  color: #aebdd2;
+  margin: 0;
+}
+
+.game-view-contact-form {
+  background: #101f34;
+  border: 1px solid #29415f;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 22px;
+}
+
+.game-view-contact-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.game-view-contact-field-wide,
+.game-view-contact-submit-row,
+.game-view-contact-email,
+.game-view-contact-pilot {
+  grid-column: 1 / -1;
+}
+
+.game-view-contact-field label {
+  color: #dce8fa;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.game-view-contact-field input,
+.game-view-contact-field textarea {
+  background: #0d1b30;
+  border: 1px solid #3a557a;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: #f2f6ff;
+  font: inherit;
+  min-height: 44px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.game-view-contact-field textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.game-view-contact-field input:focus,
+.game-view-contact-field textarea:focus {
+  border-color: #f26f21;
+  outline: 2px solid rgba(242, 111, 33, 0.22);
+}
+
+.game-view-contact-honeypot {
+  height: 0;
+  left: -9999px;
+  overflow: hidden;
+  position: absolute;
+  width: 0;
+}
+
+.game-view-contact-submit-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.game-view-contact-submit-row button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.game-view-contact-status,
+.game-view-contact-email,
+.game-view-contact-pilot {
+  color: #aebdd2;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.game-view-contact-status.success {
+  color: #7ee2a8;
+}
+
+.game-view-contact-status.error {
+  color: #ff9b9b;
+}
+
+@media (max-width: 520px) {
+  .game-view-contact-form {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .game-view-contact-field-wide,
+  .game-view-contact-submit-row,
+  .game-view-contact-email,
+  .game-view-contact-pilot {
+    grid-column: auto;
+  }
+}
+
 .game-view-logo {
   display: block;
   height: 44px;
