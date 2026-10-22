@@ -669,6 +669,30 @@ export async function submitGameManagerPilotInterest(
   return response.message || "Thanks. We received your pilot interest.";
 }
 
+export interface GameViewContactMessage {
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+  website: string;
+}
+
+export async function submitGameViewContact(
+  payload: GameViewContactMessage,
+): Promise<string> {
+  const res = await authFetch("/public/gameview/contact", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  const response = (await res.json().catch(() => ({}))) as {
+    message?: string;
+    error?: string;
+  };
+  if (!res.ok || response.error)
+    throw new Error(response.error || "Unable to send your message.");
+  return response.message || "Thanks. Your message was sent.";
+}
+
 export async function getOrganizations(): Promise<ApiOrganization[]> {
   const payload = await getJson<unknown>("/public/gameview/organizations");
   return extractListPayload(payload, "organizations").map(
