@@ -1,0 +1,52 @@
+@baseUrl = http://localhost:7071/api
+@gameId = 00000000-0000-0000-0000-000000000001
+@eventRef = replace-with-existing-event-guid-or-client-id
+@teamId = 00000000-0000-0000-0000-000000000002
+@playerId = 00000000-0000-0000-0000-000000000003
+
+### Replace a penalty's details; requires an existing event (204, or 404 if missing)
+PUT {{baseUrl}}/games/{{gameId}}/events/{{eventRef}}
+Content-Type: application/json
+
+{
+  "eventType": "Penalty",
+  "teamId": "{{teamId}}",
+  "playerId": "{{playerId}}",
+  "period": 1,
+  "timeInPeriod": "12:00",
+  "infraction": "Tripping",
+  "durationMinutes": 2,
+  "penaltyType": "Minor",
+  "suspensionBehavior": null,
+  "requiresRefereeNotes": false,
+  "reviewRequired": false
+}
+
+### Replace a goal's scorer and clear both assists
+PUT {{baseUrl}}/games/{{gameId}}/events/{{eventRef}}
+Content-Type: application/json
+
+{
+  "eventType": "Goal",
+  "teamId": "{{teamId}}",
+  "playerId": "{{playerId}}",
+  "assist1Id": null,
+  "assist2Id": null,
+  "strength": "Even Strength",
+  "period": 1,
+  "timeInPeriod": "12:00"
+}
+
+### Invalid update (400)
+PUT {{baseUrl}}/games/{{gameId}}/events/{{eventRef}}
+Content-Type: application/json
+
+{
+  "eventType": "Penalty",
+  "teamId": "{{teamId}}",
+  "period": 1,
+  "timeInPeriod": "12:00"
+}
+
+### Verify the public summary reflects the edit
+GET {{baseUrl}}/public/gameview/games/{{gameId}}/summary

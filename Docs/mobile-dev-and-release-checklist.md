@@ -51,6 +51,55 @@ never treated as unsigned lineups.
 
 Run the mobile regression tests with `node --test tests/*.test.cjs`.
 
+### Editing game events
+
+Goal and penalty edits save the complete event to the API before updating the
+tablet feed or closing the editor. Player, team, assists, infraction, duration,
+strength, period, and time corrections keep the original event identity.
+Failed saves remain in the editor with an error; they are not reported as saved.
+Changing only a penalized player does not restart the active penalty timer.
+GameView's existing five-second live refresh displays successfully saved edits.
+
+Deploy the API's `PUT /games/{gameId}/events/{eventRef}` endpoint before installing
+this tablet build. The older timing-only endpoint remains available for older
+clients, but cannot save their player/detail corrections. Test a penalty player
+change and a goal scorer/assist correction while GameView is open, including a
+failed save, before releasing the updated APK.
+
+### Official game phases
+
+After officials verification, **Open Game Dashboard** enters **Pregame / Warmups**
+without marking the game In Progress. The scoreboard clock remains visible, but
+warmup countdowns cannot start official play or show a period-end prompt.
+
+The scorekeeper selects and confirms **Start Official Game** on the dashboard
+to mark the game In Progress and activate period 1. After confirming a period
+end, **Begin Period 2**, **Begin Period 3**, or **Begin Overtime** explicitly
+activates the next period. These actions never start or reset the physical
+scoreboard clock. Gateway period numbers never advance the official period.
+Only an active official period can expire, after a positive clock sample.
+Scoring entry and public live-clock updates are paused outside official play.
+
+Both full and lightweight resume snapshots preserve the official phase.
+Older snapshots without a phase require **Begin Current Period** when they
+have a recorded official start, rather than guessing from the clock display.
+Test warmup expiry, intermission expiry, period starts, and restart/reconnection
+on the dev tablet before releasing a production APK.
+
+### Goalie recovery and shot attribution
+
+Full and lightweight game snapshots retain each team's current goalie and pulled
+status. Full snapshots from older builds recover the goalie from the starting
+lineup and recorded substitutions. Shot history changes also trigger persistence.
+For older shot entries labeled Unknown Goalie, the summary assigns them to the
+named starter only when that team has no recorded goalie events. Empty-net shots
+and games with substitutions/pulls are never reassigned this way.
+
+Verify a restart with both starters playing the full game, a backup goalie in
+net, and a pulled goalie. Shot totals and goalie identities must remain unchanged
+after recovery; full-game starters must not appear beside duplicate Unknown
+Goalie rows.
+
 ## 2) External Verification (APK)
 
 Use this for coaches/testers who should run without Metro, USB, or a connected laptop.
