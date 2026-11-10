@@ -1,0 +1,81 @@
+name: Deploy Coach Site Dev
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - web/coach-site/**
+      - .github/workflows/deploy-coach-site-dev.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Coach Site to Static Web Apps
+    env:
+      STATIC_WEB_APP_NAME: swa-tipin-coach-dev
+      RESOURCE_GROUP_NAME: DefaultResourceGroup-CUS
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check Coach Site JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          find web/coach-site -type f -name '*.js' -print0 |
+            while IFS= read -r -d '' script; do
+              node --check "$script"
+            done
+
+      - name: Validate deploy settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${STATIC_WEB_APP_NAME:-}" ] || [ -z "${RESOURCE_GROUP_NAME:-}" ]; then
+            echo "Static Web App deploy settings are missing"
+            exit 1
+          fi
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Read Static Web Apps deployment token
+        shell: bash
+        run: |
+          set -euo pipefail
+          token=$(az staticwebapp secrets list \
+            --name "$STATIC_WEB_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP_NAME" \
+            --query properties.apiKey \
+            --output tsv)
+          if [ -z "$token" ]; then
+            echo "Static Web Apps deployment token was not returned"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "SWA_API_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Deploy Coach Site
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_API_TOKEN }}
+          action: upload
+          app_location: web/coach-site
+          api_location: ""
+          output_location: ""
+          skip_app_build: true
