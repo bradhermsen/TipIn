@@ -8,6 +8,12 @@ TipIn uses three layers of player data:
 
 Only certain fields sync between these layers. Most fields do not sync.
 
+> **Update (coach access):** The database has no jersey-sync trigger, and the coach roster endpoints
+> treat jersey number and position as per-team. A coach edit changes only `RosterEntries.JerseyNumber`
+> and `Position`. `Players.JerseyNumber` is only a default copied when a roster entry is first created.
+> Name and grade are person-level and apply to every team. The two-way jersey sync described below
+> is not implemented.
+
 ---
 
 ## Players → RosterEntries (Downstream Sync)

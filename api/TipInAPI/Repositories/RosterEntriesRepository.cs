@@ -57,7 +57,7 @@ namespace TipInAPI.Repositories
                     p.JerseyNumber
                 FROM RosterEntries r
                 INNER JOIN Players p ON p.PlayerId = r.PlayerId
-                WHERE r.TeamId = @TeamId
+                WHERE r.TeamId = @TeamId AND r.RemovedAtUtc IS NULL
                 ORDER BY r.JerseyNumber ASC;
             ";
 

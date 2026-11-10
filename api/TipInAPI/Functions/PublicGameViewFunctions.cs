@@ -350,7 +350,7 @@ namespace TipInAPI.Functions
                     r.IsActive
                 FROM RosterEntries r
                 INNER JOIN Players p ON p.PlayerId = r.PlayerId
-                WHERE r.TeamId IN @TeamIds
+                WHERE r.TeamId IN @TeamIds AND r.RemovedAtUtc IS NULL
                 ORDER BY r.TeamId, COALESCE(r.JerseyNumber, p.JerseyNumber), p.LastName, p.FirstName;",
                 new { TeamIds = new[] { game.HomeTeamId, game.AwayTeamId } })).ToList();
 

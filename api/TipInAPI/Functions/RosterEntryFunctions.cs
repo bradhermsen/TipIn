@@ -128,6 +128,17 @@ namespace TipInAPI.Functions
                 return result;
             }
 
+            if (role == "Coach" || role == "TeamManager")
+            {
+                var isAssigned = await _teamAuthorizationService.IsUserAssignedToTeamAsync(Guid.Parse(userId), rosterEntry.TeamId, _coachTeamsService);
+                if (!isAssigned)
+                {
+                    // Same response as a missing entry so IDs cannot be probed
+                    result.StatusCode = System.Net.HttpStatusCode.NotFound;
+                    await result.WriteAsJsonAsync(new { error = "Roster entry not found." });
+                    return result;
+                }
+            }
             await result.WriteAsJsonAsync(rosterEntry);
             return result;
         }
@@ -323,6 +334,12 @@ namespace TipInAPI.Functions
                 if (!_authorizationService.HasAnyRole(role, "Coach", "TeamManager", "OrgAdmin", "Viewer"))
                     return await AuthorizationHelper.ForbiddenResponse(req, "Insufficient permissions to view available players");
 
+                if (role == "Coach" || role == "TeamManager")
+                {
+                    var isAssigned = await _teamAuthorizationService.IsUserAssignedToTeamAsync(Guid.Parse(userId), teamId, _coachTeamsService);
+                    if (!isAssigned)
+                        return await AuthorizationHelper.ForbiddenResponse(req, "You are not assigned to this team");
+                }
                 var availablePlayers = await _service.GetAvailablePlayersAsync(teamId);
                 await response.WriteAsJsonAsync(availablePlayers);
             }
