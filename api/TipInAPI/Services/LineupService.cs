@@ -69,7 +69,8 @@ namespace TipInAPI.Services
         public string? OpponentTeamType { get; set; }
         public string OpponentDisplayName => Infrastructure.TeamNameFormatter.Format(OpponentName, OpponentLevelName, OpponentTeamType);
         public bool Locked { get; set; }
-        public bool NeedsLineup => !Locked && GameDateTime.Date >= DateTime.UtcNow.Date
+        // The coach site applies its browser-local date cutoff to eligible games.
+        public bool NeedsLineup => !Locked
             && !new[] { "final", "completed", "closed", "cancelled", "canceled", "postponed" }
                 .Contains((Status ?? "").Trim().ToLowerInvariant());
     }

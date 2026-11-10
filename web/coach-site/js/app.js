@@ -1,5 +1,5 @@
 import { loadConfig, getSession, login, logout, publicApi, api } from "./api.js";
-import { $, esc, formatGameTime } from "./ui.js";
+import { $, esc, formatGameTime, needsLineup } from "./ui.js";
 import { renderRoster } from "./roster.js";
 import { renderGames, renderLineup } from "./lineup.js";
 
@@ -202,10 +202,10 @@ async function renderHome(session) {
   if (teams.length === 1) return navigate(`/teams/${teams[0].teamId}`, true);
   const gameResults = await Promise.allSettled(teams.map((t) => api(`/coach/teams/${t.teamId}/games`)));
   if (location.pathname !== "/") return;
-  app.innerHTML = `<h1>Your teams</h1>` + (teams.length
+  app.innerHTML = `<header class="teams-heading"><h1>Your Teams</h1><p class="muted">Hockey</p></header>` + (teams.length
     ? teams.map((t, i) => {
       const result = gameResults[i];
-      const pending = result.status === "fulfilled" ? result.value.filter((g) => g.needsLineup) : [];
+      const pending = result.status === "fulfilled" ? result.value.filter((g) => needsLineup(g)) : [];
       return `<a class="card" href="/teams/${esc(t.teamId)}/games" data-link>
         <div class="row spread"><b>${esc(t.teamDisplayName)}</b>
           ${pending.length ? `<span class="pill live">${pending.length} ${pending.length === 1 ? "game needs" : "games need"} lineup</span>` : ""}</div>

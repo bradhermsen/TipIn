@@ -1,5 +1,5 @@
 import { api, ApiError } from "./api.js";
-import { $, esc, modal, toast, formatGameTime, positionLabel } from "./ui.js";
+import { $, esc, modal, toast, formatGameTime, positionLabel, needsLineup } from "./ui.js";
 import { teamHeader, wireTabs } from "./team.js";
 
 export async function renderGames(app, teamId, navigate) {
@@ -16,7 +16,7 @@ export async function renderGames(app, teamId, navigate) {
   app.innerHTML = header + (games.length
     ? games.map((g) => `<a class="card" href="/teams/${esc(teamId)}/games/${esc(g.gameId)}" data-link>
         <div class="row spread"><b>${g.isHome ? "vs" : "at"} ${esc(g.opponentDisplayName)}</b>
-          ${g.locked ? `<span class="pill locked">Signed</span>` : g.needsLineup ? `<span class="pill live">Needs lineup</span>` : ""}</div>
+          ${g.locked ? `<span class="pill locked">Signed</span>` : needsLineup(g) ? `<span class="pill live">Needs lineup</span>` : ""}</div>
         <div class="muted small">${esc(formatGameTime(g.gameDateTime))}</div></a>`).join("")
     : `<div class="card muted">No games in the next 60 days.</div>`);
   wireTabs(app, navigate);
