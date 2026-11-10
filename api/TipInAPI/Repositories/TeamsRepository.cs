@@ -41,7 +41,7 @@ namespace TipInAPI.Repositories
                     sr.Name AS SectionRegionName,
                     l.Name AS LevelName,
                     s.SeasonName,
-                    (SELECT COUNT(*) FROM RosterEntries r WHERE r.TeamId = t.Id) AS RosterCount,
+                    (SELECT COUNT(*) FROM RosterEntries r WHERE r.TeamId = t.Id AND r.RemovedAtUtc IS NULL) AS RosterCount,
                     t.HeadCoachName,
                     t.ScorekeeperCode AS GameManagerCode,
                     NULL AS GameManagerCodeExpiresAt,
@@ -120,7 +120,7 @@ namespace TipInAPI.Repositories
                     t.IsExternal,
                     t.Notes,
 
-                    (SELECT COUNT(*) FROM RosterEntries r WHERE r.TeamId = t.Id) AS RosterCount
+                    (SELECT COUNT(*) FROM RosterEntries r WHERE r.TeamId = t.Id AND r.RemovedAtUtc IS NULL) AS RosterCount
 
                 FROM Teams t
                 LEFT JOIN Organizations o ON t.OrganizationId = o.OrganizationId

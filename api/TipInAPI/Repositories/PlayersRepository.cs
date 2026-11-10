@@ -275,7 +275,9 @@ namespace TipInAPI.Repositories
 
             using (var conn = Connection)
             {
-                // Update player fields
+                conn.Open();
+                using var tx = conn.BeginTransaction();
+
                 var affected = await conn.ExecuteAsync(sqlUpdatePlayer, new
                 {
                     Id = id,
@@ -291,63 +293,29 @@ namespace TipInAPI.Repositories
                     dto.OrganizationId,
                     dto.JerseyNumber,
                     dto.IsActive
-                });
+                }, tx);
 
                 if (affected == 0)
                     throw new Exception($"Player with ID {id} not found.");
 
-                // Update team assignments
                 if (dto.TeamIds != null && dto.TeamIds.Count > 0)
                 {
-                    // Test: Only delete RosterEntries, don't touch PlayerTeams
-                    Console.WriteLine($"[DEBUG] Step 1: Deleting RosterEntries for player {id}");
-                    try
-                    {
-                        await conn.ExecuteAsync(
-                            "DELETE FROM RosterEntries WHERE PlayerId = @PlayerId",
-                            new { PlayerId = id }
-                        );
-                        Console.WriteLine($"[DEBUG] Step 1: SUCCESS - RosterEntries deleted");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[DEBUG] Step 1: FAILED - {ex.Message}");
-                        throw;
-                    }
-                    
-                    Console.WriteLine($"[DEBUG] Step 2: Deleting PlayerTeams for player {id}");
-                    try
-                    {
-                        await conn.ExecuteAsync(
-                            "DELETE FROM PlayerTeams WHERE PlayerId = @PlayerId",
-                            new { PlayerId = id }
-                        );
-                        Console.WriteLine($"[DEBUG] Step 2: SUCCESS - PlayerTeams deleted");
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[DEBUG] Step 2: FAILED - {ex.Message}");
-                        throw;
-                    }
+                    await conn.ExecuteAsync(
+                        "DELETE FROM RosterEntries WHERE PlayerId = @PlayerId",
+                        new { PlayerId = id }, tx);
+                    await conn.ExecuteAsync(
+                        "DELETE FROM PlayerTeams WHERE PlayerId = @PlayerId",
+                        new { PlayerId = id }, tx);
 
-                    Console.WriteLine($"[DEBUG] Step 3: Inserting PlayerTeams");
                     foreach (var teamId in dto.TeamIds)
                     {
-                        try
-                        {
-                            await conn.ExecuteAsync(
-                                "INSERT INTO PlayerTeams (PlayerId, TeamId) VALUES (@PlayerId, @TeamId)",
-                                new { PlayerId = id, TeamId = teamId }
-                            );
-                            Console.WriteLine($"[DEBUG] Step 3: SUCCESS - Inserted PlayerId={id}, TeamId={teamId}");
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[DEBUG] Step 3: FAILED - {ex.Message}");
-                            throw;
-                        }
+                        await conn.ExecuteAsync(
+                            "INSERT INTO PlayerTeams (PlayerId, TeamId) VALUES (@PlayerId, @TeamId)",
+                            new { PlayerId = id, TeamId = teamId }, tx);
                     }
                 }
+
+                tx.Commit();
             }
         }
 

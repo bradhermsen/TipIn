@@ -68,11 +68,17 @@ var host = new HostBuilder()
         services.AddScoped<IUsersService, UsersService>();
         services.AddScoped<ICoachTeamsService, CoachTeamsService>();
         services.AddScoped<ITeamAuthorizationService, TeamAuthorizationService>();
+        services.AddScoped<ICoachInvitationService, CoachInvitationService>();
+        services.AddScoped<ICoachRosterService, CoachRosterService>();
+        services.AddScoped<ISessionService, SessionService>();
+        services.AddScoped<ILineupService, LineupService>();
         services.AddScoped<IAccessCodeService, AccessCodeService>();
         services.AddScoped<IAccessCodeValidator, AccessCodeValidator>();
         services.AddScoped<IEmailService, SmtpEmailService>();
         services.AddScoped<IGameSummaryReportService, GameSummaryReportService>();
         services.AddSingleton<IGatewaySecretProtector, GatewaySecretProtector>();
+        services.AddSingleton<IUserStatusCache>(sp =>
+            new UserStatusCache(new SqlConnectionFactory(sp.GetRequiredService<IConfiguration>())));
         services.AddScoped<IAuthorizationService>(sp =>
         {
             var config = sp.GetRequiredService<IConfiguration>();
@@ -82,7 +88,7 @@ var host = new HostBuilder()
                 throw new InvalidOperationException("Jwt:Key must be configured.");
             }
 
-            return new AuthorizationService(jwtKey);
+            return new AuthorizationService(jwtKey, sp.GetRequiredService<IUserStatusCache>());
         });
     })
     .Build();

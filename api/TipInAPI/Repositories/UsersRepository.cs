@@ -133,7 +133,8 @@ namespace TipInAPI.Repositories
                 const string sqlPass = @"
                     UPDATE AuthUsers
                     SET PasswordHash = @PasswordHash
-                    WHERE Id = @Id;";
+                    WHERE Id = @Id;
+                    UPDATE dbo.RefreshTokens SET RevokedAtUtc = SYSUTCDATETIME() WHERE UserId = @Id AND RevokedAtUtc IS NULL;";
 
                 await conn.ExecuteAsync(sqlPass, new
                 {
@@ -331,7 +332,8 @@ namespace TipInAPI.Repositories
         {
             using var conn = _db.CreateConnection();
             await conn.ExecuteAsync(
-                "UPDATE AuthUsers SET PasswordHash = @Hash WHERE Id = @Id;",
+                "UPDATE AuthUsers SET PasswordHash = @Hash WHERE Id = @Id;" +
+                " UPDATE dbo.RefreshTokens SET RevokedAtUtc = SYSUTCDATETIME() WHERE UserId = @Id AND RevokedAtUtc IS NULL;",
                 new { Id = id, Hash = passwordHash }
             );
         }

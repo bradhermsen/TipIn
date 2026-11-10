@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
@@ -27,6 +29,9 @@ namespace TipInAPI.Functions
             _teamAuthorizationService = teamAuthorizationService;
             _coachTeamsService = coachTeamsService;
         }
+
+        private static bool IsTeamScopedRole(string role) =>
+            role == "Coach" || role == "TeamManager";
 
         // =========================================================
         // GET ALL PLAYERS (DTO VERSION)
@@ -58,6 +63,21 @@ namespace TipInAPI.Functions
                 return await AuthorizationHelper.ForbiddenResponse(req, "Insufficient permissions to view players");
 
             var allPlayers = await _service.GetAllDtosAsync();
+
+            // Coaches and team managers only see players on their assigned teams
+            if (IsTeamScopedRole(role))
+            {
+                var assigned = await _teamAuthorizationService.GetAssignedTeamIdsAsync(Guid.Parse(userId), _coachTeamsService);
+                allPlayers = allPlayers
+                    .Where(p => p.Teams.Any(t => assigned.Contains(t.TeamId)))
+                    .Select(p =>
+                    {
+                        p.Teams = p.Teams.Where(t => assigned.Contains(t.TeamId)).ToList();
+                        return p;
+                    })
+                    .ToList();
+            }
+
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(allPlayers);
             return response;
@@ -108,6 +128,20 @@ namespace TipInAPI.Functions
                 await notFound.WriteStringAsync("Player not found");
                 return notFound;
             }
+
+            if (IsTeamScopedRole(role))
+            {
+                var assigned = await _teamAuthorizationService.GetAssignedTeamIdsAsync(Guid.Parse(userId), _coachTeamsService);
+                if (!playerData.Teams.Any(t => assigned.Contains(t.TeamId)))
+                {
+                    // Same response as a missing player so IDs cannot be probed
+                    var hidden = req.CreateResponse(HttpStatusCode.NotFound);
+                    await hidden.WriteStringAsync("Player not found");
+                    return hidden;
+                }
+                playerData.Teams = playerData.Teams.Where(t => assigned.Contains(t.TeamId)).ToList();
+            }
+
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(playerData);
             return response;
@@ -177,6 +211,18 @@ namespace TipInAPI.Functions
                 var bad = req.CreateResponse(HttpStatusCode.BadRequest);
                 await bad.WriteStringAsync("Invalid payload");
                 return bad;
+            }
+
+            if (IsTeamScopedRole(role))
+            {
+                var existing = await _service.GetByIdAsync(id);
+                var assigned = await _teamAuthorizationService.GetAssignedTeamIdsAsync(Guid.Parse(userId), _coachTeamsService);
+                if (existing == null || !existing.Teams.Any(t => assigned.Contains(t.TeamId)))
+                    return await AuthorizationHelper.ForbiddenResponse(req, "You can only update players on your assigned teams");
+
+                // Coaches cannot move a player between organizations or rewrite team assignments
+                dto.OrganizationId = existing.OrganizationId;
+                dto.TeamIds = new List<Guid>();
             }
 
             try

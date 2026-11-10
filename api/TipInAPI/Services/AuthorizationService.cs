@@ -19,9 +19,10 @@ namespace TipInAPI.Services
     public class AuthorizationService : IAuthorizationService
     {
         private readonly string _jwtSecret;
+        private readonly IUserStatusCache? _userStatus;
         private readonly JwtSecurityTokenHandler _tokenHandler = new JwtSecurityTokenHandler();
 
-        public AuthorizationService(string jwtSecret)
+        public AuthorizationService(string jwtSecret, IUserStatusCache? userStatus = null)
         {
             if (string.IsNullOrWhiteSpace(jwtSecret))
             {
@@ -29,6 +30,7 @@ namespace TipInAPI.Services
             }
 
             _jwtSecret = jwtSecret;
+            _userStatus = userStatus;
         }
 
         /// <summary>
@@ -70,6 +72,14 @@ namespace TipInAPI.Services
 
                 if (string.IsNullOrEmpty(userIdClaim))
                     return (false, null, null);
+
+                // Reject disabled users and role changes made after the token was issued
+                if (_userStatus != null)
+                {
+                    if (!Guid.TryParse(userIdClaim, out var uid) ||
+                        !_userStatus.IsTokenStillValid(uid, roleClaim ?? "Viewer"))
+                        return (false, null, null);
+                }
 
                 return (true, userIdClaim, roleClaim ?? "Viewer");
             }

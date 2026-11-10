@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using TipInAPI.Infrastructure.Database;
+using TipInAPI.Services;
 
 namespace TipInAPI.Functions
 {
@@ -19,12 +20,14 @@ namespace TipInAPI.Functions
         private readonly ISqlConnectionFactory _connectionFactory;
         private readonly IConfiguration _config;
         private readonly ILogger<AuthLogin> _logger;
+        private readonly ISessionService _sessions;
 
-        public AuthLogin(ISqlConnectionFactory connectionFactory, IConfiguration config, ILogger<AuthLogin> logger)
+        public AuthLogin(ISqlConnectionFactory connectionFactory, IConfiguration config, ILogger<AuthLogin> logger, ISessionService sessions)
         {
             _connectionFactory = connectionFactory;
             _config = config;
             _logger = logger;
+            _sessions = sessions;
         }
 
         [Function("AuthLogin")]
@@ -71,8 +74,11 @@ namespace TipInAPI.Functions
                     return unauthorized;
                 }
 
-                if (!string.Equals(user.Role, "SuperAdmin", StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(user.OrganizationType, "External", StringComparison.OrdinalIgnoreCase))
+                // External organizations (visiting teams) may only sign in as Coach, so they can manage their own rosters
+                var isExternal = string.Equals(user.OrganizationType, "External", StringComparison.OrdinalIgnoreCase);
+                var externalAllowed = string.Equals(user.Role, "SuperAdmin", StringComparison.OrdinalIgnoreCase) ||
+                                      string.Equals(user.Role, "Coach", StringComparison.OrdinalIgnoreCase);
+                if (isExternal && !externalAllowed)
                 {
                     var forbidden = req.CreateResponse(System.Net.HttpStatusCode.Forbidden);
                     await forbidden.WriteStringAsync("External Organizations do not have portal access.");
@@ -82,10 +88,16 @@ namespace TipInAPI.Functions
                 // Generate JWT
                 var token = GenerateJwtToken(user);
 
+                // Refresh tokens are issued only when the client asks to stay signed in (never for tablets)
+                string? refreshToken = body.KeepSignedIn
+                    ? await _sessions.IssueRefreshTokenAsync(user.Id)
+                    : null;
+
                 var response = req.CreateResponse(System.Net.HttpStatusCode.OK);
                 await response.WriteAsJsonAsync(new
                 {
                     token,
+                    refreshToken,
                     role = user.Role,
                     userId = user.Id
                 });
@@ -128,6 +140,7 @@ namespace TipInAPI.Functions
         {
             public string Email { get; set; }
             public string Password { get; set; }
+            public bool KeepSignedIn { get; set; }
         }
 
         private class AuthUser

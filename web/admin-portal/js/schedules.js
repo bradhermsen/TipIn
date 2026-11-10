@@ -1203,6 +1203,11 @@ function renderGamesGrouped(list) {
                     `
                         : ""
                     }
+                    ${
+                      CoachAccessUi.canUnlock()
+                        ? `<button class="nf-btn-icon lineup" data-id="${g.gameId}" title="Lineups"><i class="fa fa-list-check"></i></button>`
+                        : ""
+                    }
                     <button class="nf-btn-icon edit" data-id="${g.gameId}" title="Edit">
                       <i class="fa fa-edit"></i>
                     </button>
@@ -1248,6 +1253,13 @@ function renderGamesGrouped(list) {
 function wireGameRowButtons() {
   document.querySelectorAll(".nf-btn-icon.pdf").forEach((btn) => {
     btn.onclick = () => downloadFinalPdf(btn.dataset.id);
+  });
+
+  document.querySelectorAll(".nf-btn-icon.lineup").forEach((btn) => {
+    btn.onclick = () => {
+      const game = (typeof allGames !== "undefined" ? allGames : []).find((g) => g.gameId === btn.dataset.id);
+      if (game) CoachAccessUi.openLineups(game, allTeams);
+    };
   });
 
   document.querySelectorAll(".nf-btn-icon.edit").forEach((btn) => {
