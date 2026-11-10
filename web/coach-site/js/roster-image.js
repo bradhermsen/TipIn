@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { $, esc, modal, POSITIONS, toast } from "./ui.js";
-import { parseRosterText, validateImportRow } from "./roster-image-parser.js";
+import { parseRosterText, validateImportRow, ROSTER_COLUMNS, setRosterColumn } from "./roster-image-parser.js";
 
 let engine;
 function loadEngine() {
@@ -16,6 +16,7 @@ function loadEngine() {
 
 export function openRosterImage(teamId, reload) {
   let worker, imageUrl, closed = false, importing = false, rows = [], changed = false;
+  let columns = ROSTER_COLUMNS.map(([field]) => field);
   const m = modal(`<h2>Import roster from image</h2>
     <p class="msg warn"><strong>Beta:</strong> This feature is intended to make importing rosters quicker.
       Corrections will be needed. Review and verify every player's information against the original roster before adding players.</p>
@@ -26,15 +27,30 @@ export function openRosterImage(teamId, reload) {
     <div id="ocr-status" role="status"></div><div id="import-error" role="alert"></div>
     <label for="ocr-text">Recognized text (correct it before building the preview)</label>
     <textarea id="ocr-text" rows="8"></textarea>
-    <label for="roster-layout">Column order</label><select id="roster-layout">
-      <option value="jersey-name-position-grade">Jersey, name, position/grade</option>
-      <option value="name-jersey-position-grade">Name, jersey, position/grade</option></select>
+    <p class="small muted">Column order: match the fields to the roster from left to right. Each field can be selected once.</p>
+    <div class="grid2" id="roster-columns">${columns.map((field, i) => `<div>
+      <label for="roster-column-${i}">Column ${i + 1}</label><select id="roster-column-${i}" data-column="${i}"></select></div>`).join("")}</div>
     <button type="button" class="secondary block" id="build-preview">Review players</button>
     <div id="import-rows"></div>
     <label class="check"><input type="checkbox" id="reviewed" /> I checked every selected player's name and numbers against the image.</label>
     <button type="button" class="block" id="import-players" disabled>Add reviewed players</button>
     <button type="button" class="link-btn" id="close-import">Cancel</button>`);
   const error = (text) => { $("#import-error", m.el).innerHTML = `<div class="msg error">${esc(text)}</div>`; };
+  const drawColumns = () => {
+    m.el.querySelectorAll("[data-column]").forEach((select, i) => {
+      select.innerHTML = ROSTER_COLUMNS.filter(([field]) => !columns.slice(0, i).includes(field))
+        .map(([field, label]) => `<option value="${field}" ${columns[i] === field ? "selected" : ""}>${label}</option>`).join("");
+      select.onchange = () => {
+        columns = setRosterColumn(columns, i, select.value);
+        drawColumns();
+        rows = [];
+        $("#import-rows", m.el).innerHTML = "";
+        $("#reviewed", m.el).checked = false;
+        $("#import-players", m.el).disabled = true;
+      };
+    });
+  };
+  drawColumns();
   const close = () => {
     if (importing) return;
     closed = true;
@@ -128,7 +144,7 @@ export function openRosterImage(teamId, reload) {
   };
   $("#build-preview", m.el).onclick = () => {
     if (changed) return error("Some players were already added. Close this import and start a new one to read another image.");
-    const parsed = parseRosterText($("#ocr-text", m.el).value, $("#roster-layout", m.el).value);
+    const parsed = parseRosterText($("#ocr-text", m.el).value, columns);
     if (!parsed.length) return error("No player rows found. Add or correct the roster text first.");
     if (parsed.length > 60) return error("Import at most 60 rows at a time. Remove headings and non-player text.");
     rows = parsed.map((r) => ({ ...r, selected: true }));
@@ -172,7 +188,8 @@ export function openRosterImage(teamId, reload) {
       $("#import-players", m.el).disabled = true;
       $("#close-import", m.el).textContent = "Done";
       if (changed) {
-        for (const id of ["roster-image", "ocr-text", "roster-layout", "build-preview"]) $(`#${id}`, m.el).disabled = true;
+        for (const id of ["roster-image", "ocr-text", "build-preview"]) $(`#${id}`, m.el).disabled = true;
+        m.el.querySelectorAll("[data-column]").forEach((select) => { select.disabled = true; });
       }
     }
     const failed = pending.find((r) => !r.done);
