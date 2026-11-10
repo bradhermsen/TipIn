@@ -161,11 +161,11 @@ Static vanilla-JS mobile site: sign in (optional "keep me signed in"), forgot/re
 7. Additional regression coverage: `CoachEmailAutomationSettingsTests`, `CoachGameManagerAccessTests`, and `CoachHttpResponseTests` verify persistence/rollback, head-coach code eligibility, SuperAdmin-only settings and no-store responses. Run `node --test web/admin-portal/tests/email-automation.test.cjs` for Admin toggle loading, saving, permissions and explicit failure states.
 
 ## Release checklist
-1. Run on TipInProd, in order: `CreateCoachInvitations.sql`, `CreateRefreshAndResetTokens.sql`, `AddRosterSoftDeleteAndAudit.sql`, `CreateGameLineups.sql`.
+1. Run on TipInProd, in order: `CreateCoachInvitations.sql`, `CreateRefreshAndResetTokens.sql`, `AddRosterSoftDeleteAndAudit.sql`, `CreateGameLineups.sql`, `CreateCoachReminderDeliveries.sql`. Use an authorized SQL administrator through the private network; never enable public SQL access for deployment.
 2. Deploy the API; set `CoachApp:BaseUrl` to the coach site URL (invite and reset emails use it).
 3. Deploy the admin portal.
-4. Create the coach Static Web App, add a deploy workflow, point `config.json` at the prod API, add the `coach` CNAME. The API currently allows all origins (`host.json`), so no CORS change is needed.
+4. Deploy `swa-tipin-coach-prod` with the manually confirmed `Deploy Coach Site Production` workflow on `main`. The workflow builds local OCR assets and sets `config.json` to the production API. The `coach.tipinscoring.com` CNAME points to `blue-rock-01c71a810.6.azurestaticapps.net`. Include the production Admin, GameView, and coach origins in the Function App's Azure CORS allowlist.
 5. Smoke test: invite, accept, roster edit, lineup save and sign, admin unlock.
 
 ## Open items
-- Add the coach site's DNS CNAME once the Azure hostname exists.
+- Keep all three saved email automation switches off and `CoachReminders__Enabled=false` until automatic production delivery is explicitly approved. `CoachApp__BaseUrl` must be `https://coach.tipinscoring.com`.
