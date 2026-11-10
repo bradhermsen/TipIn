@@ -45,5 +45,7 @@ export function needsLineup(game, now = new Date()) {
   const date = new Date(game.gameDateTime);
   if (Number.isNaN(date.getTime())) throw new Error("Cannot check lineup reminder: invalid game date.");
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return game.needsLineup && date >= today;
+  const end = new Date(today);
+  end.setDate(end.getDate() + 11);
+  return game.needsLineup && date >= today && date < end;
 }

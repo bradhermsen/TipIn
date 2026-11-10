@@ -13,6 +13,9 @@ test("lineup reminders use the coach's local calendar date, not UTC midnight", (
       ["2026-11-09T08:00:00", true, true],
       ["2026-11-09T21:30:00", true, true],
       ["2026-11-10T18:00:00", true, true],
+      ["2026-11-19T23:59:59", true, true],
+      ["2026-11-20T00:00:00", true, false],
+      ["2026-12-01T18:00:00", true, false],
       ["2026-11-08T23:59:59", true, false],
       ["2026-11-10T18:00:00", false, false],
     ]) {
@@ -21,6 +24,24 @@ test("lineup reminders use the coach's local calendar date, not UTC midnight", (
     assert.equal(needsLineup({ gameDateTime: "2026-11-09T23:59:59", needsLineup: true },
       new Date("2026-11-10T00:00:00")), false);
     assert.throws(() => needsLineup({ gameDateTime: "bad date", needsLineup: true }, now), /invalid game date/);
+  } finally {
+    if (previousZone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousZone;
+  }
+});
+
+test("ten-day reminder window follows local calendar days across daylight saving and month boundaries", () => {
+  const previousZone = process.env.TZ;
+  process.env.TZ = "America/Chicago";
+  try {
+    for (const [now, lastDay, nextDay] of [
+      ["2026-03-01T12:00:00", "2026-03-11T23:59:59", "2026-03-12T00:00:00"],
+      ["2026-10-25T12:00:00", "2026-11-04T23:59:59", "2026-11-05T00:00:00"],
+      ["2026-12-25T12:00:00", "2027-01-04T23:59:59", "2027-01-05T00:00:00"],
+    ]) {
+      assert.equal(needsLineup({ gameDateTime: lastDay, needsLineup: true }, new Date(now)), true, lastDay);
+      assert.equal(needsLineup({ gameDateTime: nextDay, needsLineup: true }, new Date(now)), false, nextDay);
+    }
   } finally {
     if (previousZone === undefined) delete process.env.TZ;
     else process.env.TZ = previousZone;

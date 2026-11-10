@@ -17,6 +17,8 @@ function loadEngine() {
 export function openRosterImage(teamId, reload) {
   let worker, imageUrl, closed = false, importing = false, rows = [], changed = false;
   const m = modal(`<h2>Import roster from image</h2>
+    <p class="msg warn"><strong>Beta:</strong> This feature is intended to make importing rosters quicker.
+      Corrections will be needed. Review and verify every player's information against the original roster before adding players.</p>
     <p class="muted small">Choose a clear printed roster photo or screenshot (JPEG, PNG, or WebP, up to 10 MB).
       Image recognition runs on this device. The image is not uploaded. Only reviewed player fields are sent when you confirm.</p>
     <label for="roster-image">Roster photo or screenshot</label><input id="roster-image" type="file" accept="image/jpeg,image/png,image/webp" />
