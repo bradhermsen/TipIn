@@ -684,6 +684,7 @@ function renderTeamsGrouped(teams) {
                   </div>
                   <div class="nf-item-card-actions">
                     <button class="nf-btn-icon view team-view-btn" data-id="${team.teamId}" title="Edit Roster"><i class="fa-solid fa-users"></i></button>
+                    ${CoachAccessUi.canManage() ? `<button class="nf-btn-icon team-coach-access-btn" data-id="${team.teamId}" data-name="${(team.name || "").replace(/"/g, "&quot;")}" title="Coach Access"><i class="fa-solid fa-user-plus"></i></button>` : ""}
                     <button class="nf-btn-icon edit team-edit-btn" data-id="${team.teamId}" title="Edit"><i class="fa-solid fa-pen-to-square"></i></button>
                     <button class="nf-btn-icon schedule team-schedule-btn" data-id="${team.teamId}" title="Add Game"><i class="fa-solid fa-calendar-days"></i></button>
                     <button class="nf-btn-icon delete team-delete-btn" data-id="${team.teamId}" title="Delete"><i class="fa-solid fa-trash"></i></button>
@@ -725,6 +726,10 @@ function renderTeamsGrouped(teams) {
 function wireTeamCardActions() {
   document.querySelectorAll(".team-view-btn").forEach((btn) => {
     btn.onclick = () => navigateToRosterEditor(btn.dataset.id);
+  });
+
+  document.querySelectorAll(".team-coach-access-btn").forEach((btn) => {
+    btn.onclick = () => CoachAccessUi.open(btn.dataset.id, btn.dataset.name);
   });
 
   document.querySelectorAll(".team-edit-btn").forEach((btn) => {
