@@ -50,7 +50,7 @@ export async function renderLineup(app, teamId, gameId, navigate) {
     app.innerHTML = `<a class="small" href="/teams/${esc(teamId)}/games" data-link>‹ Games</a>
       <h1>Game lineup</h1>
       ${locked ? `<div class="msg ok"><b>Signed and locked</b> by ${esc(state.signedBy || "coach")}${state.signedAtUtc ? " on " + esc(new Date(/Z$/i.test(state.signedAtUtc) ? state.signedAtUtc : state.signedAtUtc + "Z").toLocaleString()) : ""}.
-        To change it, ask your administrator to unlock it.</div>` : `<p class="muted small">${esc(need)}</p>`}
+        To change it, email <a href="mailto:info@tipinscoring.com">info@tipinscoring.com</a> to unlock it.</div>` : `<p class="muted small">${esc(need)}</p>`}
       <div id="banner">${banner}</div>
       <div class="card">
         <div class="lineup-head small muted"><span>Player</span><span>Active</span><span>Starting</span></div>

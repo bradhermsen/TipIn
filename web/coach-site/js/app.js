@@ -200,7 +200,6 @@ async function renderHome(session) {
     app.innerHTML = msg("error", err.message);
     return;
   }
-  if (teams.length === 1) return navigate(`/teams/${teams[0].teamId}`, true);
   const gameResults = await Promise.allSettled(teams.map((t) => api(`/coach/teams/${t.teamId}/games`)));
   if (location.pathname !== "/") return;
   app.innerHTML = `<header class="teams-heading"><h1>Your Teams</h1><p class="muted">Hockey</p></header>` + (teams.length
@@ -213,7 +212,15 @@ async function renderHome(session) {
         ${pending.length ? `<div class="muted small">${pending[0].isHome ? "vs" : "at"} ${esc(pending[0].opponentDisplayName)} · ${esc(formatGameTime(pending[0].gameDateTime))}</div>` : ""}
         ${result.status === "rejected" ? `<div class="msg error">Could not check lineups: ${esc(result.reason.message)}</div>` : ""}</a>`;
     }).join("")
-    : `<div class="card muted">No teams are assigned to your account yet. Ask your administrator for an invitation.</div>`);
+    : `<div class="card muted">No teams are assigned to your account yet. Ask your administrator for an invitation.</div>`)
+    + `<section class="card gameview-share" aria-labelledby="gameview-share-title">
+      <h2 id="gameview-share-title">Share GameView with your fans</h2>
+      <p>Family, friends, and fans can follow game scoring and view rosters on TipIn GameView.</p>
+      <p>Visit <a href="https://gameview.tipinscoring.com/">gameview.tipinscoring.com</a> or scan the QR code below.</p>
+      <a href="https://gameview.tipinscoring.com/" aria-label="Open TipIn GameView">
+        <img src="/assets/gameview-qr.png" width="180" height="180" alt="QR code linking to https://gameview.tipinscoring.com/" />
+      </a>
+    </section>`;
 }
 
 export async function route() {

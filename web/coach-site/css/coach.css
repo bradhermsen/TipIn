@@ -37,6 +37,17 @@ a { color: var(--orange-2); }
 .in { color: var(--orange); }
 
 main { max-width: 640px; margin: 0 auto; padding: 16px; }
+.game-view-legal-footer {
+  border-top: 1px solid rgba(212, 219, 227, 0.24);
+  color: #aebdd2; font-size: 0.72rem; line-height: 1.55;
+  margin: 28px auto 0; padding: 18px 12px 8px; text-align: center;
+  max-width: 640px;
+}
+.game-view-legal-footer p { margin: 0; }
+.game-view-footer-links { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; margin-bottom: 10px; }
+.game-view-footer-links a { color: #9fc9ff; }
+.gameview-share h2 { margin-top: 0; }
+.gameview-share img { display: block; max-width: 100%; height: auto; }
 
 h1 { font-size: 24px; margin: 8px 0 16px; }
 h2 { font-size: 18px; margin: 20px 0 8px; }
