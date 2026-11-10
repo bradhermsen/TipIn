@@ -353,9 +353,7 @@ export function GameDetailScreen() {
         setModeLabel(summary?.gameMode === "basic"
           ? "Basic Mode - Clock not tracked"
           : summary?.gameMode === "clock" ? "Clock Mode"
-          : summary?.gameMode === "scoreboard"
-            ? `Scoreboard Mode${summary.clockTrackingAvailable === false ? " - Disconnected" : summary.clockTrackingAvailable === true ? " - Connected" : ""}`
-            : "");
+          : "");
 
         const score = buildScoreFromSummary(
           summary,
