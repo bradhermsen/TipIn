@@ -1,7 +1,7 @@
 import { api, getSession } from "./api.js";
 import { esc } from "./ui.js";
 
-// Header with the team name and the Roster / Games tabs
+// Header with the team name and navigation tabs
 export async function teamHeader(teamId, active) {
   let name = "Team";
   let multiple = false;
@@ -17,6 +17,7 @@ export async function teamHeader(teamId, active) {
     <div class="tabs" role="tablist">
       <button type="button" role="tab" data-go="/teams/${esc(teamId)}/games" aria-selected="${active === "games"}">Games</button>
       <button type="button" role="tab" data-go="/teams/${esc(teamId)}/roster" aria-selected="${active === "roster"}">Roster</button>
+      <button type="button" role="tab" data-go="/teams/${esc(teamId)}/coaches" aria-selected="${active === "coaches"}">Coaches</button>
     </div>`;
 }
 

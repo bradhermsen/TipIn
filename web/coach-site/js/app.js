@@ -2,6 +2,7 @@ import { loadConfig, getSession, login, logout, publicApi, api } from "./api.js"
 import { $, esc, formatGameTime, needsLineup } from "./ui.js";
 import { renderRoster } from "./roster.js";
 import { renderGames, renderLineup } from "./lineup.js";
+import { renderCoaches } from "./coaches.js";
 
 const app = $("#app");
 const topbar = $("#topbar");
@@ -239,6 +240,7 @@ export async function route() {
   let m;
   if ((m = /^\/teams\/([0-9a-f-]{36})$/i.exec(path))) return renderGames(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/roster$/i.exec(path))) return renderRoster(app, m[1], navigate);
+  if ((m = /^\/teams\/([0-9a-f-]{36})\/coaches$/i.exec(path))) return renderCoaches(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games$/i.exec(path))) return renderGames(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games\/([0-9a-f-]{36})$/i.exec(path))) return renderLineup(app, m[1], m[2], navigate);
   app.innerHTML = msg("error", "Page not found.") + `<p><a href="/" data-link>Go home</a></p>`;
