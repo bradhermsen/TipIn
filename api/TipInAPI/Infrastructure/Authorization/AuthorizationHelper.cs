@@ -37,7 +37,7 @@ namespace TipInAPI.Infrastructure.Authorization
         public static async Task<HttpResponseData> UnauthorizedResponse(HttpRequestData req, string message = "Unauthorized")
         {
             var response = req.CreateResponse(HttpStatusCode.Unauthorized);
-            await response.WriteAsJsonAsync(new { error = message });
+            await response.WriteAsJsonAsync(new { error = message }, HttpStatusCode.Unauthorized);
             return response;
         }
 
@@ -47,7 +47,7 @@ namespace TipInAPI.Infrastructure.Authorization
         public static async Task<HttpResponseData> ForbiddenResponse(HttpRequestData req, string message = "Forbidden")
         {
             var response = req.CreateResponse(HttpStatusCode.Forbidden);
-            await response.WriteAsJsonAsync(new { error = message });
+            await response.WriteAsJsonAsync(new { error = message }, HttpStatusCode.Forbidden);
             return response;
         }
 
@@ -57,7 +57,7 @@ namespace TipInAPI.Infrastructure.Authorization
         public static async Task<HttpResponseData> BadRequestResponse(HttpRequestData req, string message = "Bad Request")
         {
             var response = req.CreateResponse(HttpStatusCode.BadRequest);
-            await response.WriteAsJsonAsync(new { error = message });
+            await response.WriteAsJsonAsync(new { error = message }, HttpStatusCode.BadRequest);
             return response;
         }
     }

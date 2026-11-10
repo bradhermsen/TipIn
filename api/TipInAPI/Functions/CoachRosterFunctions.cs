@@ -84,15 +84,15 @@ namespace TipInAPI.Functions
                     break;
                 case CoachRosterOutcome.NotFound:
                     response.StatusCode = HttpStatusCode.NotFound;
-                    await response.WriteAsJsonAsync(new { error = result.Message });
+                    await response.WriteAsJsonAsync(new { error = result.Message }, HttpStatusCode.NotFound);
                     break;
                 case CoachRosterOutcome.Warning:
                     response.StatusCode = HttpStatusCode.Conflict;
-                    await response.WriteAsJsonAsync(new { error = result.Message, details = result.Data });
+                    await response.WriteAsJsonAsync(new { error = result.Message, details = result.Data }, HttpStatusCode.Conflict);
                     break;
                 default:
                     response.StatusCode = HttpStatusCode.BadRequest;
-                    await response.WriteAsJsonAsync(new { error = result.Message });
+                    await response.WriteAsJsonAsync(new { error = result.Message }, HttpStatusCode.BadRequest);
                     break;
             }
             return response;
@@ -123,7 +123,7 @@ namespace TipInAPI.Functions
             {
                 var limited = req.CreateResponse(HttpStatusCode.TooManyRequests);
                 limited.Headers.Add("Retry-After", "60");
-                await limited.WriteAsJsonAsync(new { error = "Too many searches. Please wait a minute and try again." });
+                await limited.WriteAsJsonAsync(new { error = "Too many searches. Please wait a minute and try again." }, HttpStatusCode.TooManyRequests);
                 return limited;
             }
 

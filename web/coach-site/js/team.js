@@ -15,8 +15,8 @@ export async function teamHeader(teamId, active) {
   return `${multiple ? `<a class="small" href="/" data-link>‹ All teams</a>` : ""}
     <h1>${esc(name)}</h1>
     <div class="tabs" role="tablist">
-      <button type="button" role="tab" data-go="/teams/${esc(teamId)}" aria-selected="${active === "roster"}">Roster</button>
       <button type="button" role="tab" data-go="/teams/${esc(teamId)}/games" aria-selected="${active === "games"}">Games</button>
+      <button type="button" role="tab" data-go="/teams/${esc(teamId)}/roster" aria-selected="${active === "roster"}">Roster</button>
     </div>`;
 }
 

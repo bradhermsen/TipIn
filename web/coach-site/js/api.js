@@ -58,7 +58,7 @@ async function rawFetch(path, { method = "GET", body, token } = {}) {
     throw new ApiError(0, null, "Can't reach the server. Check your connection and try again.");
   }
   const data = await parse(res);
-  if (!res.ok) {
+  if (!res.ok || (data && typeof data.error === "string")) {
     const message = (data && (data.error || data.message)) || `Request failed (${res.status})`;
     throw new ApiError(res.status, data, message);
   }

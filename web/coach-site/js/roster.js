@@ -120,9 +120,10 @@ function openPlayerForm({ teamId, reload, existing }) {
     <div id="err"></div>
     <form id="f" novalidate>
       ${existing ? "" : `<div class="grid2"><div><label for="fn">First name</label><input id="fn" type="text" /></div>
-        <div><label for="ln">Last name</label><input id="ln" type="text" /></div></div>
-        <label for="gr">Grade</label><input id="gr" type="number" min="1" max="12" inputmode="numeric" />`}
-      <div class="grid2"><div><label for="jn">Jersey #</label><input id="jn" type="number" min="0" max="99" inputmode="numeric" value="${existing?.jerseyNumber ?? ""}" /></div>
+        <div><label for="ln">Last name</label><input id="ln" type="text" /></div></div>`}
+      <div class="${existing ? "grid2" : "player-details"}">
+        ${existing ? "" : `<div><label for="gr">Grade</label><input id="gr" type="number" min="1" max="12" inputmode="numeric" /></div>`}
+        <div><label for="jn">Jersey #</label><input id="jn" type="number" min="0" max="99" inputmode="numeric" value="${existing?.jerseyNumber ?? ""}" /></div>
         <div><label for="pos">Position</label><select id="pos">${positionOptions("")}</select></div></div>
       <button type="submit" class="block">Add to roster</button>
       <button type="button" class="link-btn" id="cancel">Cancel</button>

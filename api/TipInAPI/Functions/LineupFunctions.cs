@@ -97,7 +97,7 @@ namespace TipInAPI.Functions
         private static async Task<HttpResponseData> Json(HttpRequestData req, HttpStatusCode status, object body)
         {
             var response = req.CreateResponse(status);
-            await response.WriteAsJsonAsync(body);
+            await response.WriteAsJsonAsync(body, status);
             return response;
         }
 

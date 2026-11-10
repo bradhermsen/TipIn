@@ -69,6 +69,9 @@ namespace TipInAPI.Services
         public string? OpponentTeamType { get; set; }
         public string OpponentDisplayName => Infrastructure.TeamNameFormatter.Format(OpponentName, OpponentLevelName, OpponentTeamType);
         public bool Locked { get; set; }
+        public bool NeedsLineup => !Locked && GameDateTime.Date >= DateTime.UtcNow.Date
+            && !new[] { "final", "completed", "closed", "cancelled", "canceled", "postponed" }
+                .Contains((Status ?? "").Trim().ToLowerInvariant());
     }
 
     public class LineupService : ILineupService
@@ -171,7 +174,7 @@ namespace TipInAPI.Services
 
             if (IsVarsity(levelName) && starters.Count != 6) return "Varsity lineups need exactly 6 starters.";
             if (starters.Count == 0) return "Select at least one starter.";
-            if (!starters.Any(s => IsGoalie(roster.First(r => r.PlayerId == s)))) return "Starters must include a goalie.";
+            if (!starters.Any(s => IsGoalie(roster.First(r => r.PlayerId == s)))) return "Goalie selection required. Select a goalie as a starter.";
             return null;
         }
 

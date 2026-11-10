@@ -1,5 +1,5 @@
 import { loadConfig, getSession, login, logout, publicApi, api } from "./api.js";
-import { $, esc } from "./ui.js";
+import { $, esc, formatGameTime } from "./ui.js";
 import { renderRoster } from "./roster.js";
 import { renderGames, renderLineup } from "./lineup.js";
 
@@ -200,8 +200,18 @@ async function renderHome(session) {
     return;
   }
   if (teams.length === 1) return navigate(`/teams/${teams[0].teamId}`, true);
+  const gameResults = await Promise.allSettled(teams.map((t) => api(`/coach/teams/${t.teamId}/games`)));
+  if (location.pathname !== "/") return;
   app.innerHTML = `<h1>Your teams</h1>` + (teams.length
-    ? teams.map((t) => `<a class="card" href="/teams/${esc(t.teamId)}" data-link><b>${esc(t.teamDisplayName)}</b></a>`).join("")
+    ? teams.map((t, i) => {
+      const result = gameResults[i];
+      const pending = result.status === "fulfilled" ? result.value.filter((g) => g.needsLineup) : [];
+      return `<a class="card" href="/teams/${esc(t.teamId)}/games" data-link>
+        <div class="row spread"><b>${esc(t.teamDisplayName)}</b>
+          ${pending.length ? `<span class="pill live">${pending.length} ${pending.length === 1 ? "game needs" : "games need"} lineup</span>` : ""}</div>
+        ${pending.length ? `<div class="muted small">${pending[0].isHome ? "vs" : "at"} ${esc(pending[0].opponentDisplayName)} · ${esc(formatGameTime(pending[0].gameDateTime))}</div>` : ""}
+        ${result.status === "rejected" ? `<div class="msg error">Could not check lineups: ${esc(result.reason.message)}</div>` : ""}</a>`;
+    }).join("")
     : `<div class="card muted">No teams are assigned to your account yet. Ask your administrator for an invitation.</div>`);
 }
 
@@ -227,7 +237,8 @@ export async function route() {
 
   if (path === "/") return renderHome(session);
   let m;
-  if ((m = /^\/teams\/([0-9a-f-]{36})$/i.exec(path))) return renderRoster(app, m[1], navigate);
+  if ((m = /^\/teams\/([0-9a-f-]{36})$/i.exec(path))) return renderGames(app, m[1], navigate);
+  if ((m = /^\/teams\/([0-9a-f-]{36})\/roster$/i.exec(path))) return renderRoster(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games$/i.exec(path))) return renderGames(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games\/([0-9a-f-]{36})$/i.exec(path))) return renderLineup(app, m[1], m[2], navigate);
   app.innerHTML = msg("error", "Page not found.") + `<p><a href="/" data-link>Go home</a></p>`;

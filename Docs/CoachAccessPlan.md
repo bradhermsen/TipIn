@@ -129,6 +129,12 @@ Login, stages, and flow are unchanged.
 ## Coach site (`web/coach-site`)
 Static vanilla-JS mobile site: sign in (optional "keep me signed in"), forgot/reset password, accept invitation (`/accept#token=`), roster add/edit/remove with jersey and duplicate warnings, game list, lineup build and sign. `config.json` holds `apiBase`. `staticwebapp.config.json` rewrites all paths to `index.html`.
 
+- Team pages open Games by default; Roster has an explicit `/teams/{id}/roster` route.
+- Your Teams shows the count and next opponent/date for unsigned games needing lineups. Reminders include today and future games within the game-list window; signed, past, final/completed/closed, cancelled, and postponed games are excluded.
+- New-player Grade, Jersey, and Position fields share one row. Active lineup buttons are orange; selected starters are green.
+- Lineup and roster validation/conflict responses preserve their HTTP error status. Missing goalie selection prompts the coach to select a goalie as a starter; other validation failures retain their specific messages.
+- API-client regression tests: `node --test web/coach-site/tests/api.test.mjs` from the repository root.
+
 ## Release checklist
 1. Run on TipInProd, in order: `CreateCoachInvitations.sql`, `CreateRefreshAndResetTokens.sql`, `AddRosterSoftDeleteAndAudit.sql`, `CreateGameLineups.sql`.
 2. Deploy the API; set `CoachApp:BaseUrl` to the coach site URL (invite and reset emails use it).

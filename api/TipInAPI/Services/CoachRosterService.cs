@@ -17,6 +17,7 @@ namespace TipInAPI.Services
         public int? Grade { get; set; }
         public int? JerseyNumber { get; set; }
         public string? Position { get; set; }
+        public bool IsGoalie { get; set; }
     }
 
     public sealed class PlayerSearchMatch
@@ -115,7 +116,7 @@ namespace TipInAPI.Services
             using var conn = _db.CreateConnection();
             return await conn.QueryAsync<CoachRosterPlayer>(@"
                 SELECT r.Id AS RosterEntryId, p.PlayerId, p.FirstName, p.LastName, p.Grade,
-                       r.JerseyNumber, r.Position
+                       r.JerseyNumber, r.Position, ISNULL(r.IsGoalie, 0) AS IsGoalie
                 FROM RosterEntries r
                 JOIN Players p ON p.PlayerId = r.PlayerId
                 WHERE r.TeamId = @TeamId AND r.RemovedAtUtc IS NULL
