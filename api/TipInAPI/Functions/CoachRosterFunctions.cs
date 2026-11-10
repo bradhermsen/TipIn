@@ -8,6 +8,27 @@ using TipInAPI.Services;
 
 namespace TipInAPI.Functions
 {
+    // Per-instance, in-memory sliding window; limits player-search scraping by a single user
+    public static class SearchLimiter
+    {
+        private const int MaxPerWindow = 30;
+        private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, System.Collections.Generic.Queue<DateTime>> Hits = new();
+
+        public static bool TryAcquire(Guid userId, DateTime? now = null)
+        {
+            var t = now ?? DateTime.UtcNow;
+            var q = Hits.GetOrAdd(userId, _ => new System.Collections.Generic.Queue<DateTime>());
+            lock (q)
+            {
+                while (q.Count > 0 && t - q.Peek() > Window) q.Dequeue();
+                if (q.Count >= MaxPerWindow) return false;
+                q.Enqueue(t);
+                return true;
+            }
+        }
+    }
+
     public class CoachRosterFunctions
     {
         private readonly ICoachRosterService _service;
@@ -95,8 +116,16 @@ namespace TipInAPI.Functions
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/teams/{teamId:guid}/player-search")] HttpRequestData req,
             Guid teamId)
         {
-            var (_, error) = await AuthorizeAsync(req, teamId);
+            var (actorId, error) = await AuthorizeAsync(req, teamId);
             if (error != null) return error;
+
+            if (!SearchLimiter.TryAcquire(actorId!.Value))
+            {
+                var limited = req.CreateResponse(HttpStatusCode.TooManyRequests);
+                limited.Headers.Add("Retry-After", "60");
+                await limited.WriteAsJsonAsync(new { error = "Too many searches. Please wait a minute and try again." });
+                return limited;
+            }
 
             var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query)["q"] ?? "";
             return await ToResponseAsync(req, await _service.SearchPlayersAsync(teamId, query));

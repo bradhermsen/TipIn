@@ -74,6 +74,9 @@ namespace TipInAPI.Tests
 
         private string Name(Guid id) => _tag + "-" + id.ToString("N")[..6];
 
+        // Emails with this prefix are removed on Dispose
+        public string NewEmail(string label) => $"{_tag}-{label}-{Guid.NewGuid().ToString("N")[..6]}@example.test";
+
         private void Seed()
         {
             using var conn = Factory.CreateConnection();
@@ -178,6 +181,8 @@ namespace TipInAPI.Tests
                 DELETE FROM Games WHERE HomeTeamId IN @teams OR AwayTeamId IN @teams;
                 DELETE FROM CoachTeams WHERE TeamId IN @teams;
                 DELETE FROM CoachTeams WHERE UserId IN (SELECT Id FROM Users WHERE Email LIKE @emailLike);
+                DELETE FROM RefreshTokens WHERE UserId IN (SELECT Id FROM AuthUsers WHERE Email LIKE @emailLike);
+                DELETE FROM PasswordResetTokens WHERE UserId IN (SELECT Id FROM AuthUsers WHERE Email LIKE @emailLike);
                 DELETE FROM Users WHERE Email LIKE @emailLike;
                 DELETE FROM AuthUsers WHERE Email LIKE @emailLike;
                 DELETE FROM Teams WHERE Id IN @teams;
