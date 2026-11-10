@@ -280,12 +280,24 @@ type TimeoutModalState = {
   timeInPeriod: string;
 };
 
-type PeriodFlowState = "NOT_STARTED" | "IN_PROGRESS" | "INTERMISSION";
+type PeriodFlowState = "PREGAME" | "NOT_STARTED" | "IN_PROGRESS" | "INTERMISSION";
 
 type PeriodController = {
   state: PeriodFlowState;
   isOvertime: boolean;
 };
+
+function restorePeriodController(
+  saved: PeriodController | undefined,
+  startedAt: string | null | undefined,
+  period: number,
+): PeriodController {
+  if (saved && ["PREGAME", "NOT_STARTED", "IN_PROGRESS", "INTERMISSION"].includes(saved.state)) {
+    return { state: saved.state, isOvertime: saved.isOvertime };
+  }
+  // Older snapshots cannot distinguish an intermission countdown from live play.
+  return { state: startedAt ? "NOT_STARTED" : "PREGAME", isOvertime: period >= 4 };
+}
 
 type ShotAction = {
   team: "home" | "away";
@@ -456,6 +468,8 @@ export function lockSessionGameMode(session: SessionState, gatewayEnabled: boole
 }
 
 type ActiveGameSnapshot = {
+  currentGoalieByTeam?: Record<string, string | null>;
+  periodController?: PeriodController;
   userId: string;
   accessCode: string;
   stage: "gameDashboard";
@@ -482,6 +496,10 @@ type ActiveGameSnapshot = {
 };
 
 type ActiveGameResume = {
+  currentGoalieByTeam?: Record<string, string | null>;
+  homeGoaliePulled?: boolean;
+  awayGoaliePulled?: boolean;
+  periodController?: PeriodController;
   stage: "gameDashboard";
   session: SessionState;
   nextGame: NextGame | null;
@@ -1326,6 +1344,52 @@ function normalizeGoalieName(name?: string | null) {
   return normalized;
 }
 
+function restoreCurrentGoalies(
+  saved: Record<string, string | null> | undefined,
+  rosters: Record<string, RosterPlayer[]>,
+  starters: Record<string, string[]>,
+  events: GameFeedEvent[],
+): Record<string, string | null> {
+  const result: Record<string, string | null> = {};
+  for (const [teamId, roster] of Object.entries(rosters)) {
+    if (saved && Object.prototype.hasOwnProperty.call(saved, teamId)) {
+      result[teamId] = saved[teamId];
+      continue;
+    }
+    let goalieId = roster.find(
+      (player) => player.isGoalie && (starters[teamId] ?? []).includes(player.playerId),
+    )?.playerId ?? null;
+    const goalieEvents = events.filter((event) => event.eventType === "Goalie" && event.teamId === teamId)
+      .sort((a, b) => a.period - b.period ||
+        parseClockToSeconds(a.timeInPeriod) - parseClockToSeconds(b.timeInPeriod) ||
+        a.createdAtIso.localeCompare(b.createdAtIso));
+    for (const event of goalieEvents) {
+      const kind = event.goalieChangeKind ?? "change";
+      const name = kind === "change"
+        ? normalizeGoalieName(event.goalieNewName)
+        : normalizeGoalieName(event.goalieNewName) ?? normalizeGoalieName(event.goalieOldName);
+      if (kind === "change" || kind === "returned") {
+        goalieId = name
+          ? roster.find((player) => player.isGoalie && player.fullName.trim().toLowerCase() === name.toLowerCase())?.playerId ?? null
+          : null;
+      }
+    }
+    result[teamId] = goalieId;
+  }
+  return result;
+}
+
+function resolveShotGoalieName(
+  shot: ShotLogEntry,
+  starterName: string | null,
+  hasGoalieEvents: boolean,
+) {
+  const name = normalizeGoalieName(shot.goalieName);
+  return name === "Unknown Goalie" && !shot.goalieId && starterName && !hasGoalieEvents
+    ? starterName
+    : name;
+}
+
 function getAbsoluteElapsedSeconds(
   periodLengthSeconds: number,
   period: number,
@@ -1814,6 +1878,7 @@ export default function App() {
   const periodControllerStateRef =
     useRef<PeriodController["state"]>("NOT_STARTED");
   const periodExpiryHandledRef = useRef(false);
+  const officialClockArmedRef = useRef(false);
   const stageRef = useRef<Stage>(stage);
   const sessionPeriodRef = useRef(1);
   const sessionPeriodLengthRef = useRef("17");
@@ -1834,6 +1899,7 @@ export default function App() {
   function handleClockExpired() {
     if (
       gameModeRef.current === "basic" ||
+      !officialClockArmedRef.current ||
       periodExpiryHandledRef.current ||
       periodControllerStateRef.current !== "IN_PROGRESS"
     ) {
@@ -1929,7 +1995,8 @@ export default function App() {
   const isRunningTimeActive =
     session?.period === 3 &&
     Math.abs((session?.homeScore ?? 0) - (session?.awayScore ?? 0)) >= 5;
-  const isEventEntryLockedByClock = !isBasicMode && isClockRunning && !isRunningTimeActive;
+  const isEventEntryLockedByClock = periodController.state !== "IN_PROGRESS" ||
+    (!isBasicMode && isClockRunning && !isRunningTimeActive);
   const isRunningTimeEventModalOpen =
     isGoalModalOpen || isPenaltyModalOpen || isTimeoutModalOpen;
   const isAnyModalOpen =
@@ -2040,7 +2107,8 @@ export default function App() {
 
   useEffect(() => {
     const gameId = nextGame?.gameId;
-    if (!gameId || !session || stage !== "gameDashboard" || gameHasEnded) return;
+    if (!gameId || !session || stage !== "gameDashboard" || gameHasEnded ||
+      periodController.state !== "IN_PROGRESS") return;
     const homeStarters = startersByTeam[homeTeamId ?? ""] ?? [];
     const awayStarters = startersByTeam[awayTeamId ?? ""] ?? [];
     const publishStatus = () => void syncLiveStatus(
@@ -2071,6 +2139,7 @@ export default function App() {
     scoreboardConnectionState,
     stage,
     gameHasEnded,
+    periodController.state,
   ]);
 
   const scoreboardConnectionBadgeText = useMemo(() => {
@@ -2146,8 +2215,9 @@ export default function App() {
   useEffect(() => {
     if (gameClock.remainingTimeMs > 0) {
       periodExpiryHandledRef.current = false;
+      if (gameMode === "clock" && periodController.state === "IN_PROGRESS") officialClockArmedRef.current = true;
     }
-  }, [gameClock.remainingTimeMs]);
+  }, [gameClock.remainingTimeMs, periodController.state, gameMode]);
 
   useEffect(() => {
     gameClockControlsRef.current = {
@@ -2325,8 +2395,16 @@ export default function App() {
     ].filter((row) => row.teamId);
 
     for (const shot of safeShotHistory) {
-      const goalieName = normalizeGoalieName(shot?.goalieName);
-      if (!shot || !goalieName) continue;
+      if (!shot) continue;
+      const starterId = startingGoalieByTeam[shot.goalieTeamId];
+      const starterName = normalizeGoalieName(
+        (rostersByTeam[shot.goalieTeamId] ?? []).find((player) => player.playerId === starterId)?.fullName,
+      );
+      const goalieName = resolveShotGoalieName(
+        shot, starterName,
+        safeEventFeed.some((event) => event.eventType === "Goalie" && event.teamId === shot.goalieTeamId),
+      );
+      if (!goalieName) continue;
 
       const key = `${shot.goalieTeamId}:${goalieName}`;
       const current = byGoalie.get(key) ?? {
@@ -2750,31 +2828,17 @@ export default function App() {
       getPeriodLengthMinutes(sessionPeriodLengthRef.current) * 60 * 1000;
     const nextRemainingMs = parseClockDisplayToMs(nextClock);
     const nextClockSeconds = parseClockToSeconds(nextClock);
-    const payloadPeriod = Number(payload.period);
-    const normalizedPayloadPeriod = Number.isFinite(payloadPeriod)
-      ? Math.max(1, Math.floor(payloadPeriod))
-      : null;
+    if (periodControllerStateRef.current === "IN_PROGRESS" && nextRemainingMs > 0) {
+      officialClockArmedRef.current = true;
+    }
     const payloadClockRunning =
       typeof payload.clockRunning === "boolean" ? payload.clockRunning : null;
 
     const previousGatewayClockSeconds = gatewayLastClockSecondsRef.current;
     gatewayLastClockSecondsRef.current = nextClockSeconds;
 
-    const didPeriodChange =
-      normalizedPayloadPeriod != null &&
-      normalizedPayloadPeriod !== sessionPeriodRef.current;
-
-    if (didPeriodChange) {
-      // On period transition, remove expired penalties and keep only active carry-over penalties.
-      setActivePenalties((prev) =>
-        prev.filter((penalty) => penalty.remainingSeconds > 0),
-      );
-      penaltyClockCarryMsRef.current = 0;
-      penaltyClockPrevRemainingMsRef.current = null;
-    }
-
     if (
-      !didPeriodChange &&
+      periodControllerStateRef.current === "IN_PROGRESS" &&
       payloadClockRunning === false &&
       previousGatewayClockSeconds != null
     ) {
@@ -2792,13 +2856,6 @@ export default function App() {
         patch.clock = nextClock;
       }
 
-      if (
-        normalizedPayloadPeriod != null &&
-        prev.period !== normalizedPayloadPeriod
-      ) {
-        patch.period = normalizedPayloadPeriod;
-      }
-
       return Object.keys(patch).length > 0 ? { ...prev, ...patch } : prev;
     });
 
@@ -2808,16 +2865,13 @@ export default function App() {
       periodDurationMs,
     );
 
-    if (!didPeriodChange && nextRemainingMs === 0) {
+    if (nextRemainingMs === 0) {
       handleClockExpired();
     }
 
     if (payloadClockRunning === true) {
       gameClockControlsRef.current.resume();
       setIsClockRunning(true);
-      setPeriodController((prev) =>
-        prev.state === "NOT_STARTED" ? { ...prev, state: "IN_PROGRESS" } : prev,
-      );
       return;
     }
 
@@ -3339,7 +3393,8 @@ export default function App() {
   }, [stage, activeApiBase, nextGame?.gameId]);
 
   useEffect(() => {
-    if (stage !== "gameDashboard" || gameHasEnded || !nextGame?.gameId) {
+    if (stage !== "gameDashboard" || gameHasEnded || !nextGame?.gameId ||
+      periodController.state !== "IN_PROGRESS") {
       return;
     }
 
@@ -3394,6 +3449,7 @@ export default function App() {
     safeAwayShotsByPeriod.OT,
     homeShotsTotal,
     awayShotsTotal,
+    periodController.state,
   ]);
 
   useEffect(() => {
@@ -3437,10 +3493,13 @@ export default function App() {
     playerStatsById,
     teamPenaltyCountById,
     activePenalties,
+    currentGoalieByTeam,
+    shotHistory,
     homeGoaliePulled,
     awayGoaliePulled,
     penaltyShotActive,
     gameStartedAtIso,
+    periodController,
   ]);
 
   function updateSession(patch: Partial<SessionState>) {
@@ -3478,6 +3537,10 @@ export default function App() {
         stage: "gameDashboard",
         session: parsed.session,
         nextGame: parsed.nextGame ?? null,
+        periodController: parsed.periodController,
+        currentGoalieByTeam: parsed.currentGoalieByTeam,
+        homeGoaliePulled: parsed.homeGoaliePulled,
+        awayGoaliePulled: parsed.awayGoaliePulled,
         gameStartedAtIso:
           typeof parsed.gameStartedAtIso === "string"
             ? parsed.gameStartedAtIso
@@ -3553,10 +3616,12 @@ export default function App() {
       playerStatsById,
       teamPenaltyCountById,
       activePenalties,
+      currentGoalieByTeam,
       homeGoaliePulled,
       awayGoaliePulled,
       penaltyShotActive,
       gameStartedAtIso,
+      periodController,
       timestampIso: new Date().toISOString(),
     };
   }
@@ -3567,6 +3632,10 @@ export default function App() {
       session: snapshot.session,
       nextGame: snapshot.nextGame,
       gameStartedAtIso: snapshot.gameStartedAtIso ?? null,
+      periodController: snapshot.periodController,
+      currentGoalieByTeam: snapshot.currentGoalieByTeam,
+      homeGoaliePulled: snapshot.homeGoaliePulled,
+      awayGoaliePulled: snapshot.awayGoaliePulled,
       timestampIso: snapshot.timestampIso,
     };
 
@@ -3632,6 +3701,9 @@ export default function App() {
       Array.isArray(snapshot.shotHistory) ? snapshot.shotHistory : [],
     );
     setEventFeed(normalizedEventFeed);
+    setCurrentGoalieByTeam(restoreCurrentGoalies(
+      snapshot.currentGoalieByTeam, snapshot.rostersByTeam, snapshot.startersByTeam, normalizedEventFeed,
+    ));
     setPlayerStatsById(snapshot.playerStatsById ?? {});
     setTeamPenaltyCountById(snapshot.teamPenaltyCountById ?? {});
     setActivePenalties(normalizedActivePenalties);
@@ -3639,14 +3711,9 @@ export default function App() {
     setAwayGoaliePulled(snapshot.awayGoaliePulled);
     setPenaltyShotActive(snapshot.penaltyShotActive);
     setGameStartedAtIso(snapshot.gameStartedAtIso ?? null);
-    setPeriodController({
-      state:
-        parseClockToSeconds(snapshot.session.clock) <
-        getPeriodLengthMinutes(snapshot.session.periodLength) * 60
-          ? "IN_PROGRESS"
-          : "NOT_STARTED",
-      isOvertime: snapshot.session.period >= 4,
-    });
+    const restoredPeriod = restorePeriodController(snapshot.periodController, snapshot.gameStartedAtIso, snapshot.session.period);
+    periodControllerStateRef.current = restoredPeriod.state;
+    setPeriodController(restoredPeriod);
     setGameHasEnded(false);
     setStage("gameDashboard");
   }
@@ -4396,11 +4463,15 @@ export default function App() {
     }
   }
 
-  async function updateEventTimingInBackend(event: GameFeedEvent) {
+  async function updateEventInBackend(event: GameFeedEvent) {
+    if (event.eventType === "Goalie") {
+      await updateGoalieInBackend(event);
+      return;
+    }
     if (!event.gameId)
-      throw new Error("Missing gameId for event timing update.");
+      throw new Error("Missing gameId for event update.");
     const response = await fetch(
-      `${activeApiBase}/games/${event.gameId}/events/${event.localId}/timing`,
+      `${activeApiBase}/games/${event.gameId}/events/${event.localId}`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -4408,11 +4479,22 @@ export default function App() {
           eventType: event.eventType,
           period: event.period,
           timeInPeriod: event.timeInPeriod,
+          teamId: event.teamId,
+          playerId: event.playerId || null,
+          assist1Id: event.assist1Id || null,
+          assist2Id: event.assist2Id || null,
+          strength: event.strength,
+          infraction: event.infraction,
+          durationMinutes: event.durationMinutes,
+          penaltyType: event.penaltyType,
+          suspensionBehavior: event.suspensionBehavior ?? null,
+          requiresRefereeNotes: event.requiresRefereeNotes ?? false,
+          reviewRequired: event.reviewRequired ?? false,
         }),
       },
     );
     if (!response.ok) {
-      throw new Error(`Event timing update failed (${response.status}).`);
+      throw new Error(`Event update failed (${response.status}). Changes were not saved.`);
     }
   }
 
@@ -5068,8 +5150,10 @@ export default function App() {
 
   function handleClockToggle() {
     if (!session || gameMode !== "clock" || !canControlGame(session.role) || isAnyModalOpen) return;
+    if (periodController.state === "PREGAME" || periodController.state === "INTERMISSION") return;
 
     if (periodController.state === "NOT_STARTED") {
+      periodControllerStateRef.current = "IN_PROGRESS";
       setPeriodController((prev) => ({ ...prev, state: "IN_PROGRESS" }));
     }
 
@@ -5087,6 +5171,7 @@ export default function App() {
       parseClockDisplayToMs(session.clock),
       periodDurationMs,
     );
+    officialClockArmedRef.current = parseClockDisplayToMs(session.clock) > 0;
     penaltyClockPrevRemainingMsRef.current = gameClock.remainingTimeMs;
     penaltyClockCarryMsRef.current = 0;
     gameClock.resume();
@@ -5094,6 +5179,7 @@ export default function App() {
   }
 
   function startIntermission() {
+    periodControllerStateRef.current = "INTERMISSION";
     setIsClockRunning(false);
     gameClock.pause();
     gameClock.syncPausedRemaining(0, gameClock.periodDurationMs);
@@ -5107,6 +5193,7 @@ export default function App() {
     setShowPeriodOverVerify(false);
 
     if (!periodController.isOvertime && session.period >= 3) {
+      startIntermission();
       setShowEndOfRegulation(true);
       return;
     }
@@ -5116,6 +5203,24 @@ export default function App() {
 
   function handlePeriodControlButtonPress() {
     if (!session || !canControlGame(session.role) || isAnyModalOpen) return;
+    if (periodController.state === "PREGAME") {
+      Alert.alert("Start Official Game?", "Begin official period 1 tracking and mark this game In Progress? This does not start or reset the physical scoreboard clock.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Start Official Game", onPress: () => void startOfficialGame() },
+      ]);
+      return;
+    }
+    if (periodController.state === "NOT_STARTED") {
+      Alert.alert("Begin Current Period?", "Resume official tracking for the current period without advancing it or changing the scoreboard clock.", [
+        { text: "Cancel", style: "cancel" },
+        { text: "Begin Period", onPress: () => activateOfficialPeriod(session.period, true) },
+      ]);
+      return;
+    }
+    if (periodController.state === "INTERMISSION") {
+      setShowResumeVerify(true);
+      return;
+    }
     if (isBasicMode) {
       setActiveDropdown({
         title: "Period",
@@ -5129,35 +5234,57 @@ export default function App() {
       });
       return;
     }
-    if (periodController.state === "INTERMISSION") {
-      setShowResumeVerify(true);
+  }
+
+  function activateOfficialPeriod(period: number, preserveClock = false) {
+    periodExpiryHandledRef.current = false;
+    officialClockArmedRef.current = false;
+    periodControllerStateRef.current = "IN_PROGRESS";
+    penaltyClockCarryMsRef.current = 0;
+    penaltyClockPrevRemainingMsRef.current = null;
+    setActivePenalties((prev) => prev.filter((penalty) => penalty.remainingSeconds > 0));
+    setPeriodController({ state: "IN_PROGRESS", isOvertime: period >= 4 });
+    setIntermissionSeconds(0);
+    if (gameMode === "scoreboard") {
+      updateSession({ period });
+    } else {
+      const duration = getPeriodLengthMinutes(session!.periodLength) * 60 * 1000;
+      gameClock.pause();
+      const remaining = preserveClock ? parseClockDisplayToMs(session!.clock) : duration;
+      gameClock.syncPausedRemaining(remaining, duration);
+      setIsClockRunning(false);
+      updateSession({ period, clock: formatSecondsToClock(remaining / 1000) });
+    }
+  }
+
+  async function startOfficialGame() {
+    if (!session || !nextGame?.gameId || !canControlGame(session.role) ||
+      periodControllerStateRef.current !== "PREGAME") return;
+    periodControllerStateRef.current = "NOT_STARTED";
+    try {
+      await markGameInProgress(nextGame.gameId);
+      setGameStartedAtIso(new Date().toISOString());
+      activateOfficialPeriod(1);
+    } catch (err) {
+      periodControllerStateRef.current = "PREGAME";
+      trace("game.start.error", { message: err instanceof Error ? err.message : String(err) });
+      Alert.alert("Could Not Start Game", "Official tracking has not started. Check the connection and try again.");
     }
   }
 
   function confirmResumeFromIntermission() {
-    if (!session) return;
+    if (!session || periodControllerStateRef.current !== "INTERMISSION") return;
     setShowResumeVerify(false);
 
     const nextPeriod = periodController.isOvertime
       ? session.period + 1
       : Math.min(4, session.period + 1);
-    const resetClock = formatSecondsToClock(
-      getPeriodLengthMinutes(session.periodLength) * 60,
-    );
-    updateSession({
-      period: nextPeriod,
-      clock: resetClock,
-    });
-    const resetMs = getPeriodLengthMinutes(session.periodLength) * 60 * 1000;
-    gameClock.syncPausedRemaining(resetMs, resetMs);
-    gameClock.pause();
-    setPeriodController((prev) => ({ ...prev, state: "IN_PROGRESS" }));
-    setIntermissionSeconds(0);
-    setIsClockRunning(false);
+    activateOfficialPeriod(nextPeriod);
   }
 
   function handleGoToOvertime() {
     if (!session) return;
+    periodControllerStateRef.current = "INTERMISSION";
     setShowEndOfRegulation(false);
     setPeriodController({
       state: "INTERMISSION",
@@ -5400,19 +5527,6 @@ export default function App() {
     }
 
     const normalizedTimeInPeriod = formatSecondsToClock(eventTimeSeconds);
-    try {
-      await updateEventTimingInBackend({
-        ...eventEditModal.event,
-        period: eventEditModal.period,
-        timeInPeriod: normalizedTimeInPeriod,
-      });
-    } catch (err) {
-      setEventEditModalError(err instanceof Error ? err.message : String(err));
-      return;
-    }
-
-    setEventEditModalError("");
-
     const eventId = eventEditModal.event.localId;
     const nextEvents = eventFeed.map((event) => {
       if (event.localId !== eventId) return event;
@@ -5459,6 +5573,21 @@ export default function App() {
       };
     });
 
+    const updatedEvent = nextEvents.find((event) => event.localId === eventId);
+    if (!updatedEvent) {
+      setEventEditModalError("The event could not be found. Close and reopen the editor.");
+      return;
+    }
+    try {
+      await updateEventInBackend(updatedEvent);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      trace("event.update.sync.failed", { localId: eventId, message });
+      setEventEditModalError(message);
+      return;
+    }
+    setEventEditModalError("");
+
     if (eventEditModal.event.eventType === "Penalty") {
       setActivePenalties((prev) =>
         prev.map((penalty) =>
@@ -5480,7 +5609,11 @@ export default function App() {
                 ),
                 infraction: eventEditModal.infraction,
                 remainingSeconds:
-                  getPenaltyDurationMinutes(eventEditModal.penaltyType) * 60,
+                  penalty.durationMinutes === updatedEvent.durationMinutes &&
+                  penalty.period === updatedEvent.period &&
+                  penalty.timeInPeriod === updatedEvent.timeInPeriod
+                    ? penalty.remainingSeconds
+                    : getPenaltyDurationMinutes(eventEditModal.penaltyType) * 60,
                 durationMinutes: getPenaltyDurationMinutes(
                   eventEditModal.penaltyType,
                 ),
@@ -5503,26 +5636,7 @@ export default function App() {
 
     updateDerivedStateFromEvents(nextEvents);
 
-    if (eventEditModal.event.eventType === "Goalie") {
-      const updatedGoalieEvent = nextEvents.find(
-        (event) => event.localId === eventEditModal.event.localId,
-      );
-      if (updatedGoalieEvent) {
-        try {
-          await updateGoalieInBackend(updatedGoalieEvent);
-          trace("goalie.update.sync.success", {
-            localId: updatedGoalieEvent.localId,
-          });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          trace("goalie.update.sync.failed", {
-            localId: updatedGoalieEvent.localId,
-            message,
-          });
-        }
-      }
-    }
-
+    trace("event.update.sync.success", { localId: eventId });
     closeEventEditModal();
   }
 
@@ -6235,7 +6349,10 @@ export default function App() {
     }
   }
 
-  async function loadRosterAndCoaches(game: NextGame, accessCode: string, preserveDraft = false) {
+  async function loadRosterAndCoaches(
+    game: NextGame, accessCode: string, preserveDraft = false,
+    restoredGoalies?: Record<string, string | null>,
+  ) {
     setIsRosterStatusLoaded(false);
     const homeId = game.homeTeamId;
     const awayId = game.awayTeamId;
@@ -6302,7 +6419,7 @@ export default function App() {
       setIsRosterStatusLoaded(true);
 
       setHeadCoachSignatures(signaturesInit);
-      setCurrentGoalieByTeam({
+      setCurrentGoalieByTeam(restoredGoalies ?? {
         [homeId]:
           homeRoster.find((player) => player.isGoalie && startersInit[homeId].includes(player.playerId))
             ?.playerId ?? null,
@@ -6700,10 +6817,16 @@ export default function App() {
             apiBase: activeApiBase,
           });
           setGameStartedAtIso(resumeSnapshot.gameStartedAtIso ?? null);
+          const restoredPeriod = restorePeriodController(resumeSnapshot.periodController, resumeSnapshot.gameStartedAtIso, resumeSnapshot.session.period);
+          periodControllerStateRef.current = restoredPeriod.state;
+          setPeriodController(restoredPeriod);
           setNextGame(resumeSnapshot.nextGame);
+          setCurrentGoalieByTeam(resumeSnapshot.currentGoalieByTeam ?? {});
+          setHomeGoaliePulled(resumeSnapshot.homeGoaliePulled ?? false);
+          setAwayGoaliePulled(resumeSnapshot.awayGoaliePulled ?? false);
           setGameHasEnded(false);
           setStage("gameDashboard");
-          void loadRosterAndCoaches(resumeSnapshot.nextGame, accessCode);
+          void loadRosterAndCoaches(resumeSnapshot.nextGame, accessCode, false, resumeSnapshot.currentGoalieByTeam);
           trace("activegame.resume.restored", {
             gameId: resumeSnapshot.nextGame.gameId,
           });
@@ -6904,7 +7027,9 @@ export default function App() {
     const goalieTeamId = team === "home" ? awayTeamId : homeTeamId;
     const goalieTeamName =
       team === "home" ? session.awayTeam : session.homeTeam;
-    const goalieId = currentGoalieByTeam[goalieTeamId] ?? null;
+    const goalieId = currentGoalieByTeam[goalieTeamId] === undefined
+      ? startingGoalieByTeam[goalieTeamId] ?? null
+      : currentGoalieByTeam[goalieTeamId];
     const goaliePulled = team === "home" ? awayGoaliePulled : homeGoaliePulled;
     const goalieName = goaliePulled
       ? "Empty Net"
@@ -7578,10 +7703,8 @@ export default function App() {
 
     try {
       await saveOfficialsForGame(nextGame.gameId, officials);
-      await markGameInProgress(nextGame.gameId);
       await markActiveGame();
-      const startedAtIso = new Date().toISOString();
-      setGameStartedAtIso(startedAtIso);
+      setGameStartedAtIso(null);
 
       const homeStarters = startersByTeam[homeTeamId] ?? [];
       const awayStarters = startersByTeam[awayTeamId] ?? [];
@@ -7618,11 +7741,14 @@ export default function App() {
       gameClock.syncPausedRemaining(startedPeriodMs, startedPeriodMs);
       gameClock.pause();
       setSession(startedSession);
-      setPeriodController({ state: "NOT_STARTED", isOvertime: false });
+      periodControllerStateRef.current = "PREGAME";
+      setPeriodController({ state: "PREGAME", isOvertime: false });
       setIntermissionSeconds(0);
       setStage("gameDashboard");
       await persistActiveGameSnapshot(
-        buildActiveGameSnapshot(startedSession, nextGame),
+        { ...buildActiveGameSnapshot(startedSession, nextGame),
+          currentGoalieByTeam: { [homeTeamId]: homeStarterGoalieId, [awayTeamId]: awayStarterGoalieId },
+          gameStartedAtIso: null, periodController: { state: "PREGAME", isOvertime: false } },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -7634,6 +7760,10 @@ export default function App() {
   }
 
   function handleEndGame() {
+    if (periodController.state === "PREGAME") {
+      Alert.alert("Game Not Started", "Start the official game before ending it.");
+      return;
+    }
     if (gameDqPenaltyEvents.length > 0) {
       setSuspensionNotesError("");
       setShowSuspensionNotesModal(true);
@@ -8439,7 +8569,7 @@ export default function App() {
                 style={styles.primaryButton}
                 onPress={startGameFromOfficials}
               >
-                <Text style={styles.primaryButtonText}>Start Game</Text>
+                <Text style={styles.primaryButtonText}>Open Game Dashboard</Text>
               </Pressable>
             </View>
           </View>
@@ -8647,10 +8777,10 @@ export default function App() {
                 <View style={styles.confirmHeader}>
                   <Text style={styles.confirmIcon}>⚠</Text>
                   <Text style={styles.confirmTitle}>
-                    Ready to Start the Game?
+                    Open Game Dashboard?
                   </Text>
                   <Text style={styles.confirmSubtitle}>
-                    Please read the following carefully before proceeding.
+                    Setup is complete. Official play starts separately on the dashboard.
                   </Text>
                 </View>
 
@@ -8659,11 +8789,10 @@ export default function App() {
                     <Text style={styles.confirmWarningIcon}>🔒</Text>
                     <View style={styles.confirmWarningTextWrap}>
                       <Text style={styles.confirmWarningTitle}>
-                        Rosters are locked at game start
+                        Rosters are ready
                       </Text>
                       <Text style={styles.confirmWarningText}>
-                        No players can be added, removed, or modified on either
-                        team's roster once the game has started.
+                        Confirm both teams' roster and lineup information before proceeding.
                       </Text>
                     </View>
                   </View>
@@ -8672,18 +8801,17 @@ export default function App() {
                     <Text style={styles.confirmWarningIcon}>📋</Text>
                     <View style={styles.confirmWarningTextWrap}>
                       <Text style={styles.confirmWarningTitle}>
-                        Officials are locked at game start
+                        Officials are ready
                       </Text>
                       <Text style={styles.confirmWarningText}>
-                        Official assignments and signatures cannot be changed
-                        after the game begins.
+                        Official assignments and signatures are saved when you open the dashboard.
                       </Text>
                     </View>
                   </View>
 
                   <Text style={styles.confirmFooterText}>
                     By confirming, you acknowledge that all roster and official
-                    information is correct and final.
+                    information is correct. The game remains Scheduled until you select Start Official Game.
                   </Text>
                 </View>
 
@@ -8701,7 +8829,7 @@ export default function App() {
                     onPress={handleConfirmStartGame}
                   >
                     <Text style={styles.confirmPrimaryButtonText}>
-                      Confirm &amp; Start Game →
+                      Open Game Dashboard →
                     </Text>
                   </Pressable>
                 </View>
@@ -9415,9 +9543,9 @@ export default function App() {
           >
             <View style={styles.confirmOverlay}>
               <View style={styles.goalModal}>
-                <Text style={styles.goalModalTitle}>Verify Resume</Text>
+                <Text style={styles.goalModalTitle}>Begin Next Period</Text>
                 <Text style={styles.goalModalSubtitle}>
-                  Advance period and restart game clock?
+                  Begin the next official period? The physical scoreboard clock will not be started or reset.
                 </Text>
                 <View style={styles.rowButtons}>
                   <Pressable
@@ -9430,7 +9558,7 @@ export default function App() {
                     style={styles.primaryButton}
                     onPress={confirmResumeFromIntermission}
                   >
-                    <Text style={styles.primaryButtonText}>Resume Game</Text>
+                    <Text style={styles.primaryButtonText}>Begin Period</Text>
                   </Pressable>
                 </View>
               </View>
@@ -11237,7 +11365,9 @@ export default function App() {
                 <View style={styles.gameClockCenterStack}>
                   <View style={styles.gameClockCenter}>
                     <Text style={styles.gameClockPeriod}>
-                      {periodDotIndicator} {activePeriodLabel} Period
+                      {periodController.state === "PREGAME" ? "Pregame / Warmups" :
+                        periodController.state === "INTERMISSION" ? "Intermission" :
+                        `${periodDotIndicator} ${activePeriodLabel} Period`}
                     </Text>
                     <Text style={styles.gameClockTime}>{isBasicMode ? "--:--" : session.clock}</Text>
                     <View style={styles.gameClockModeBadge}>
@@ -11251,7 +11381,7 @@ export default function App() {
                     </Text> : null}
                   </View>
 
-                  {gameMode === "clock" ? <View style={styles.clockPrimaryButtons}>
+                  {gameMode === "clock" && periodController.state === "IN_PROGRESS" ? <View style={styles.clockPrimaryButtons}>
                     <Pressable
                       style={[
                         isClockRunning
@@ -11282,11 +11412,15 @@ export default function App() {
                     onPress={handlePeriodControlButtonPress}
                   >
                     <Text style={styles.clockStatusText}>
-                      {isBasicMode ? "Select Period" : periodController.state === "NOT_STARTED"
-                        ? "Period: Not Started"
+                      {periodController.state === "PREGAME" ? "Start Official Game" :
+                        periodController.state === "NOT_STARTED"
+                        ? "Begin Current Period"
+                        : periodController.state === "INTERMISSION"
+                          ? session.period >= 3 ? "Begin Overtime" : `Begin Period ${session.period + 1}`
+                        : isBasicMode ? "Select Period"
                         : periodController.state === "IN_PROGRESS"
                           ? "Period: In Progress"
-                          : "Intermission: Resume Game"}
+                          : "Intermission"}
                     </Text>
                   </Pressable>
 
@@ -11711,7 +11845,8 @@ export default function App() {
 
         {stage === "gameDashboard" &&
         session &&
-        periodController.state === "INTERMISSION" ? (
+        periodController.state === "INTERMISSION" &&
+        !showResumeVerify && !showEndOfRegulation ? (
           <Modal
             visible
             transparent
@@ -11724,15 +11859,15 @@ export default function App() {
               <View style={styles.intermissionCard}>
                 <Text style={styles.intermissionTitle}>Intermission Mode</Text>
                 <Text style={styles.intermissionSubtitle}>
-                  Game controls are locked until you resume.
+                  Game controls are locked until you begin the next official period.
                 </Text>
 
                 <View style={styles.intermissionTimerShell}>
                   <Text style={styles.intermissionTimerLabel}>
-                    TIME IN INTERMISSION
+                    {gameMode === "scoreboard" ? "SCOREBOARD CLOCK" : "TIME IN INTERMISSION"}
                   </Text>
                   <Text style={styles.intermissionTimerValue}>
-                    {formatSecondsToClock(intermissionSeconds)}
+                    {gameMode === "scoreboard" ? session.clock : formatSecondsToClock(intermissionSeconds)}
                   </Text>
                 </View>
 
@@ -11817,7 +11952,7 @@ export default function App() {
                   onPress={() => setShowResumeVerify(true)}
                 >
                   <Text style={styles.intermissionResumeButtonText}>
-                    Resume Game
+                    {session.period >= 3 ? "Begin Overtime" : `Begin Period ${session.period + 1}`}
                   </Text>
                 </Pressable>
               </View>

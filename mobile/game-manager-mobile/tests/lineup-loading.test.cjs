@@ -93,6 +93,16 @@ test("no saved lineup preserves roster defaults and local starter draft on refre
   assert.equal(bindings.state.lineups.home.locked, false);
 });
 
+test("lightweight recovery roster load preserves the restored goalie instead of selecting the starter", async () => {
+  const bindings = rosterBindings({ version: 5, locked: true, participantIds: ["a", "b"], starterIds: ["a"] });
+  const context = load(["loadRosterAndCoaches"], bindings);
+  const restored = { home: "backup", away: null };
+  await context.loadRosterAndCoaches({ gameId: "game", homeTeamId: "home", awayTeamId: "away" }, "GM-FIXTURE", false, restored);
+  assert.equal(bindings.state.goalies, restored);
+  assert.equal(bindings.state.goalies.home, "backup");
+  assert.equal(bindings.state.goalies.away, null);
+});
+
 test("failed refresh cannot mark roster status loaded or replace it with unsigned defaults", async () => {
   const bindings = rosterBindings(null, { fetchSavedLineup: async () => { throw new Error("Unable to load saved lineup (403)."); } });
   const context = load(["loadRosterAndCoaches"], bindings);

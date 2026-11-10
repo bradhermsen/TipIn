@@ -1519,6 +1519,114 @@ namespace TipInAPI.Functions
             return response;
         }
 
+        [Function("UpdateGameEventForMobile")]
+        public async Task<HttpResponseData> UpdateGameEventForMobile(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "games/{gameId:guid}/events/{eventRef}")] HttpRequestData req,
+            Guid gameId,
+            string eventRef)
+        {
+            MobileUpdateEventRequest? payload;
+            try
+            {
+                payload = await req.ReadFromJsonAsync<MobileUpdateEventRequest>();
+            }
+            catch (JsonException)
+            {
+                var invalidJson = req.CreateResponse(HttpStatusCode.BadRequest);
+                await invalidJson.WriteAsJsonAsync(new { error = "Invalid event update JSON." }, HttpStatusCode.BadRequest);
+                return invalidJson;
+            }
+            if (payload == null || payload.TeamId == Guid.Empty || payload.Period < 1 || payload.Period > 4
+                || string.IsNullOrWhiteSpace(payload.TimeInPeriod)
+                || !System.Text.RegularExpressions.Regex.IsMatch(payload.TimeInPeriod.Trim(), @"^\d{1,2}:[0-5]\d$")
+                || (payload.EventType != "Goal" && payload.EventType != "Penalty" && payload.EventType != "Shot")
+                || (payload.EventType != "Shot" && (!payload.PlayerId.HasValue || payload.PlayerId == Guid.Empty))
+                || (payload.EventType == "Penalty" && (payload.DurationMinutes < 0 || string.IsNullOrWhiteSpace(payload.Infraction))))
+            {
+                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+                await bad.WriteAsJsonAsync(new { error = "Invalid event update payload." }, HttpStatusCode.BadRequest);
+                return bad;
+            }
+
+            using var conn = _connectionFactory.CreateConnection();
+            var eventId = await ResolveEventIdByRef(conn, gameId, eventRef, payload.EventType);
+            if (eventId == null || eventId == Guid.Empty) return req.CreateResponse(HttpStatusCode.NotFound);
+
+            var validTeam = await conn.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(*) FROM dbo.Games
+                WHERE GameId = @GameId AND (HomeTeamId = @TeamId OR AwayTeamId = @TeamId);",
+                new { GameId = gameId, payload.TeamId });
+            if (validTeam == 0)
+            {
+                var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+                await bad.WriteAsJsonAsync(new { error = "The event team must belong to this game." }, HttpStatusCode.BadRequest);
+                return bad;
+            }
+
+            var parameters = new
+            {
+                GameId = gameId, EventId = eventId, payload.EventType, payload.TeamId,
+                payload.PlayerId, payload.Assist1Id, payload.Assist2Id,
+                Strength = NormalizeGoalStrength(payload.Strength), GoalStrength = payload.Strength,
+                payload.Period, TimeInPeriod = payload.TimeInPeriod.Trim(),
+                payload.Infraction, payload.DurationMinutes, payload.PenaltyType,
+                payload.SuspensionBehavior, payload.RequiresRefereeNotes, payload.ReviewRequired
+            };
+            using var transaction = conn.BeginTransaction();
+            var updated = await conn.ExecuteAsync(@"
+                UPDATE dbo.GameEvents
+                SET TeamId = @TeamId, PlayerId = @PlayerId,
+                    SecondaryPlayerId = CASE WHEN EventType = 'Goal' THEN @Assist1Id ELSE SecondaryPlayerId END,
+                    Period = @Period, TimeInPeriod = @TimeInPeriod
+                WHERE GameId = @GameId AND Id = @EventId AND EventType = @EventType;",
+                parameters, transaction);
+            if (updated == 0)
+            {
+                transaction.Rollback();
+                return req.CreateResponse(HttpStatusCode.NotFound);
+            }
+
+            var detailUpdated = 1;
+            if (payload.EventType == "Goal")
+            {
+                detailUpdated = await conn.ExecuteAsync(@"
+                    UPDATE dbo.GameGoals
+                    SET ScoringTeamId = @TeamId, ScorerId = @PlayerId,
+                        Assist1Id = @Assist1Id, Assist2Id = @Assist2Id, Strength = @Strength,
+                        Period = @Period, TimeInPeriod = @TimeInPeriod
+                    WHERE GameId = @GameId AND EventId = @EventId;",
+                    parameters, transaction);
+                await conn.ExecuteAsync(@"
+                    UPDATE dbo.GameEvents
+                    SET Details = JSON_MODIFY(COALESCE(Details, '{}'), '$.GoalStrength', @GoalStrength)
+                    WHERE GameId = @GameId AND Id = @EventId;", parameters, transaction);
+            }
+            else if (payload.EventType == "Penalty")
+            {
+                detailUpdated = await conn.ExecuteAsync(@"
+                    UPDATE dbo.GamePenalties
+                    SET TeamId = @TeamId, PlayerId = @PlayerId, Infraction = @Infraction,
+                        DurationMinutes = @DurationMinutes, Period = @Period, TimeInPeriod = @TimeInPeriod
+                    WHERE GameId = @GameId AND EventId = @EventId;",
+                    parameters, transaction);
+                await conn.ExecuteAsync(@"
+                    UPDATE dbo.GameEvents
+                    SET Details = JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(COALESCE(Details, '{}'),
+                        '$.PenaltyType', @PenaltyType), '$.SuspensionBehavior', @SuspensionBehavior),
+                        '$.RequiresRefereeNotes', @RequiresRefereeNotes), '$.ReviewRequired', @ReviewRequired)
+                    WHERE GameId = @GameId AND Id = @EventId;", parameters, transaction);
+            }
+            if (detailUpdated == 0)
+            {
+                transaction.Rollback();
+                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                await conflict.WriteAsJsonAsync(new { error = "Event details are missing. The edit was not saved." }, HttpStatusCode.Conflict);
+                return conflict;
+            }
+            transaction.Commit();
+            return req.CreateResponse(HttpStatusCode.NoContent);
+        }
+
         [Function("UpdateGameEventTimingForMobile")]
         public async Task<HttpResponseData> UpdateGameEventTimingForMobile(
             [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "games/{gameId:guid}/events/{eventRef}/timing")] HttpRequestData req,
@@ -2144,6 +2252,25 @@ namespace TipInAPI.Functions
             public string EventType { get; set; } = string.Empty;
             public int Period { get; set; }
             public string TimeInPeriod { get; set; } = string.Empty;
+        }
+
+        /// <summary>Replaces editable event details while preserving the original event identity.</summary>
+        private sealed record MobileUpdateEventRequest
+        {
+            public string EventType { get; init; } = string.Empty;
+            public Guid TeamId { get; init; }
+            public Guid? PlayerId { get; init; }
+            public Guid? Assist1Id { get; init; }
+            public Guid? Assist2Id { get; init; }
+            public string? Strength { get; init; }
+            public int Period { get; init; }
+            public string TimeInPeriod { get; init; } = string.Empty;
+            public string? Infraction { get; init; }
+            public int DurationMinutes { get; init; }
+            public string? PenaltyType { get; init; }
+            public string? SuspensionBehavior { get; init; }
+            public bool RequiresRefereeNotes { get; init; }
+            public bool ReviewRequired { get; init; }
         }
 
         private class MobileCompleteGameRequest
