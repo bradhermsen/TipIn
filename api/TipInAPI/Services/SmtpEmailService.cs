@@ -256,6 +256,8 @@ namespace TipInAPI.Services
                 message.To.Add(recipient);
             }
 
+            AddHtmlBody(message, request);
+
             foreach (var attachment in request.Attachments ?? new System.Collections.Generic.List<EmailAttachment>())
             {
                 if (attachment?.Content == null || attachment.Content.Length == 0)
@@ -286,6 +288,26 @@ namespace TipInAPI.Services
             }
 
             await client.SendMailAsync(message);
+        }
+
+        private static void AddHtmlBody(MailMessage message, EmailSendRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.BodyHtml)) return;
+            message.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(
+                request.BodyText ?? string.Empty, System.Text.Encoding.UTF8, "text/plain"));
+            var html = AlternateView.CreateAlternateViewFromString(
+                request.BodyHtml, System.Text.Encoding.UTF8, "text/html");
+            message.AlternateViews.Add(html);
+            foreach (var image in request.InlineImages)
+            {
+                if (image.Content.Length == 0 || string.IsNullOrWhiteSpace(image.ContentId))
+                    throw new InvalidOperationException("Inline email images require content and a content ID.");
+                html.LinkedResources.Add(new LinkedResource(new System.IO.MemoryStream(image.Content), image.ContentType)
+                {
+                    ContentId = image.ContentId,
+                    TransferEncoding = System.Net.Mime.TransferEncoding.Base64
+                });
+            }
         }
 
         private EmailServerSettings MergeWithDefaults(EmailServerSettings? dbSettings)

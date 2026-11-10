@@ -34,6 +34,19 @@ namespace TipInAPI.Services
         public string Email { get; set; } = "";
         public DateTime ExpiresAtUtc { get; set; }
         public string Token { get; set; } = "";
+        public CoachInvitationGame? Game { get; set; }
+    }
+
+    public sealed class CoachInvitationGame
+    {
+        public Guid GameId { get; set; }
+        public string AwayTeamName { get; set; } = "";
+        public string HomeTeamName { get; set; } = "";
+        public DateTime GameDateTime { get; set; }
+        public string? ArenaName { get; set; }
+        public string? RinkName { get; set; }
+        public string? TeamType { get; set; }
+        public string? LevelName { get; set; }
     }
 
     public enum AcceptInviteStatus
@@ -113,6 +126,25 @@ namespace TipInAPI.Services
                 if (team == null)
                     throw new InvalidOperationException("Team not found.");
 
+                var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
+                    TimeZoneInfo.FindSystemTimeZoneById("America/Chicago")).Date;
+                var game = await conn.QueryFirstOrDefaultAsync<CoachInvitationGame>(@"
+                    SELECT TOP 1 g.GameId, away.Name AS AwayTeamName, home.Name AS HomeTeamName,
+                        g.GameDateTime, g.ArenaName, g.RinkName,
+                        COALESCE(home.TeamType, away.TeamType) AS TeamType,
+                        COALESCE(hl.Name, al.Name) AS LevelName
+                    FROM dbo.Games g
+                    JOIN dbo.Teams home ON home.Id = g.HomeTeamId
+                    JOIN dbo.Teams away ON away.Id = g.AwayTeamId
+                    LEFT JOIN dbo.Levels hl ON hl.Id = home.LevelId
+                    LEFT JOIN dbo.Levels al ON al.Id = away.LevelId
+                    WHERE @TeamId IN (g.HomeTeamId, g.AwayTeamId)
+                      AND g.GameDateTime >= @Today
+                      AND LOWER(LTRIM(RTRIM(ISNULL(g.Status, '')))) NOT IN
+                          ('final', 'completed', 'closed', 'cancelled', 'canceled', 'postponed', 'in progress', 'inprogress', 'live')
+                    ORDER BY g.GameDateTime, g.GameId;",
+                    new { TeamId = teamId, Today = today }, tx);
+
                 await conn.ExecuteAsync(@"
                     UPDATE dbo.CoachInvitations
                     SET Status = 'Revoked', RevokedAtUtc = SYSUTCDATETIME(), RevokedByUserId = @UserId
@@ -145,7 +177,8 @@ namespace TipInAPI.Services
                     TeamType = team.TeamType,
                     Email = email,
                     ExpiresAtUtc = expires,
-                    Token = token
+                    Token = token,
+                    Game = game
                 };
             }
             catch

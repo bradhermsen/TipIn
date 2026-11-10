@@ -106,16 +106,7 @@ namespace TipInAPI.Functions
                 var settings = await _emailService.GetSettingsAsync();
                 if (settings.Enabled)
                 {
-                    await _emailService.SendAsync(new EmailSendRequest
-                    {
-                        To = { invite.Email },
-                        Subject = $"You're invited to coach {invite.TeamDisplayName} on TipIn Scoring",
-                        BodyText =
-                            $"You have been invited to manage the roster and game-day lineup for {invite.TeamDisplayName} on TipIn Scoring.\n\n" +
-                            $"Accept your invitation: {link}\n\n" +
-                            $"This link expires on {invite.ExpiresAtUtc:MMMM d, yyyy} and can be used once. " +
-                            "If you were not expecting this invitation, you can ignore this email."
-                    });
+                    await _emailService.SendAsync(CoachInvitationEmail.Create(invite, link));
                     emailSent = true;
                 }
             }
