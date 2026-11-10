@@ -55,6 +55,17 @@ namespace TipInAPI.Services
         // Starters for each locked team in the game, keyed by team id
         Task<Dictionary<Guid, List<Guid>>> GetLockedStartersAsync(Guid gameId);
         Task<(Guid HomeTeamId, Guid AwayTeamId)?> GetGameTeamsAsync(Guid gameId);
+        Task<IEnumerable<CoachGameItem>> ListGamesForTeamAsync(Guid teamId);
+    }
+
+    public class CoachGameItem
+    {
+        public Guid GameId { get; set; }
+        public DateTime GameDateTime { get; set; }
+        public string? Status { get; set; }
+        public bool IsHome { get; set; }
+        public string? OpponentName { get; set; }
+        public bool Locked { get; set; }
     }
 
     public class LineupService : ILineupService
@@ -372,6 +383,26 @@ namespace TipInAPI.Services
                 ) latest
                 WHERE l.GameId = @GameId AND latest.EventType = 'Sign';", new { GameId = gameId });
             return rows.ToDictionary(r => r.TeamId, r => ParseIds(r.StarterIdsJson));
+        }
+
+        public async Task<IEnumerable<CoachGameItem>> ListGamesForTeamAsync(Guid teamId)
+        {
+            using var conn = _db.CreateConnection();
+            return (await conn.QueryAsync<CoachGameItem>(@"
+                SELECT g.GameId, g.GameDateTime, g.Status,
+                       CASE WHEN g.HomeTeamId = @TeamId THEN 1 ELSE 0 END AS IsHome,
+                       opp.Name AS OpponentName,
+                       CASE WHEN (SELECT TOP 1 e.EventType FROM dbo.GameLineupEvents e
+                                  WHERE e.GameId = g.GameId AND e.TeamId = @TeamId
+                                  ORDER BY e.CreatedAtUtc DESC, e.EventId DESC) = 'Sign' THEN 1 ELSE 0 END AS Locked
+                FROM dbo.Games g
+                INNER JOIN dbo.Teams opp ON opp.Id = CASE WHEN g.HomeTeamId = @TeamId THEN g.AwayTeamId ELSE g.HomeTeamId END
+                WHERE @TeamId IN (g.HomeTeamId, g.AwayTeamId)
+                  AND ISNULL(g.Status, '') <> 'Cancelled'
+                  AND g.GameDateTime >= DATEADD(DAY, -7, SYSUTCDATETIME())
+                  AND g.GameDateTime <= DATEADD(DAY, 60, SYSUTCDATETIME())
+                ORDER BY g.GameDateTime;",
+                new { TeamId = teamId })).ToList();
         }
 
         public async Task<(Guid HomeTeamId, Guid AwayTeamId)?> GetGameTeamsAsync(Guid gameId)

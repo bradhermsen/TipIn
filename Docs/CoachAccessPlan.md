@@ -120,5 +120,20 @@ Login, stages, and flow are unchanged.
 - Tablet: offline pending signature, resume after restart, fallback with no coach lineup.
 - Mobile layouts on common phone sizes.
 
+## Visiting coaches
+- An OrgAdmin can invite coaches to teams in their own organization, plus External-organization teams that have a non-cancelled game against one of their teams within 30 days either side.
+- The same rule lets that OrgAdmin list and remove those coaches and read or unlock those teams' lineups.
+- Coaches see only their own team rosters; access stays active after the game.
+
+## Coach site (`web/coach-site`)
+Static vanilla-JS mobile site: sign in (optional "keep me signed in"), forgot/reset password, accept invitation (`/accept#token=`), roster add/edit/remove with jersey and duplicate warnings, game list, lineup build and sign. `config.json` holds `apiBase`. `staticwebapp.config.json` rewrites all paths to `index.html`.
+
+## Release checklist
+1. Run on TipInProd, in order: `CreateCoachInvitations.sql`, `CreateRefreshAndResetTokens.sql`, `AddRosterSoftDeleteAndAudit.sql`, `CreateGameLineups.sql`.
+2. Deploy the API; set `CoachApp:BaseUrl` to the coach site URL (invite and reset emails use it).
+3. Deploy the admin portal.
+4. Create the coach Static Web App, add a deploy workflow, point `config.json` at the prod API, add the `coach` CNAME. The API currently allows all origins (`host.json`), so no CORS change is needed.
+5. Smoke test: invite, accept, roster edit, lineup save and sign, admin unlock.
+
 ## Open items
-- Add the coach site's DNS CNAME once the Azure hostname exists, and allow its origin in the API (CORS, CSP, token storage).
+- Add the coach site's DNS CNAME once the Azure hostname exists.

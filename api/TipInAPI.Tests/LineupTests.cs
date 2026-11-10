@@ -53,6 +53,22 @@ namespace TipInAPI.Tests
             _lineups.SignAsync(_gameId, _db.HostTeamId, _coach, new SignLineupRequest { ExpectedVersion = version, SignerName = "Coach T" });
 
         [Fact]
+        public async Task ListGamesForTeam_ReturnsUpcomingGames_WithOpponentAndLockState()
+        {
+            using (var conn = _db.Factory.CreateConnection())
+                conn.Execute("UPDATE Games SET Status = 'Cancelled' WHERE HomeTeamId = @t AND AwayTeamId = @v",
+                    new { t = _db.HostTeamId, v = _db.VisitorTeamId });
+
+            var games = (await _lineups.ListGamesForTeamAsync(_db.HostTeamId)).ToList();
+
+            var mine = Assert.Single(games);
+            Assert.Equal(_gameId, mine.GameId);
+            Assert.True(mine.IsHome);
+            Assert.False(mine.Locked);
+            Assert.False(string.IsNullOrEmpty(mine.OpponentName));
+        }
+
+        [Fact]
         public async Task Varsity_RequiresExactlySixStarters()
         {
             SetLevel("Varsity");

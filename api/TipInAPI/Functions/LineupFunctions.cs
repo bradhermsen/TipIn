@@ -125,6 +125,16 @@ namespace TipInAPI.Functions
 
         // Coach / admin
 
+        [Function("CoachListTeamGames")]
+        public async Task<HttpResponseData> CoachListGames(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/teams/{teamId:guid}/games")] HttpRequestData req,
+            Guid teamId)
+        {
+            var (_, error) = await AuthorizeCoachAsync(req, teamId, false);
+            if (error != null) return error;
+            return await Json(req, HttpStatusCode.OK, await _service.ListGamesForTeamAsync(teamId));
+        }
+
         [Function("CoachGetLineup")]
         public async Task<HttpResponseData> CoachGet(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/games/{gameId:guid}/teams/{teamId:guid}/lineup")] HttpRequestData req,
