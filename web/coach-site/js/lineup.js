@@ -51,11 +51,15 @@ export async function renderLineup(app, teamId, gameId, navigate) {
     const locked = state.locked;
     app.innerHTML = `<a class="small" href="/teams/${esc(teamId)}/games" data-link>‹ Games</a>
       <h1>Game lineup</h1>
-      ${managerAccess.code ? `<section class="card"><h2>Game Manager Access</h2>
-        <p>Home game managed by TipIn. Use this team's existing code in the Game Manager app.</p>
-        <p><strong id="gm-code">${esc(managerAccess.code)}</strong> <button type="button" class="secondary" id="copy-gm-code">Copy code</button></p>
-        <p class="small muted">Head coach only. Share only with your authorized scorekeeper. Existing game-day access rules apply.</p>
-        <p id="gm-copy-status" class="small" role="status"></p></section>` : ""}
+      ${managerAccess.code ? `<button type="button" class="link-btn gm-access-link" id="view-gm-code" aria-haspopup="dialog">View Game Manager Access Code</button>
+        <dialog class="gm-access-dialog" id="gm-access-dialog" aria-labelledby="gm-access-title" aria-describedby="gm-access-description">
+          <h2 id="gm-access-title">Game Manager Access</h2>
+          <p id="gm-access-description">Use this code in the Game Manager app.</p>
+          <div class="row"><strong id="gm-code">${esc(managerAccess.code)}</strong> <button type="button" class="secondary" id="copy-gm-code">Copy code</button></div>
+          <p class="small muted">Share only with your authorized scorekeeper. Existing game-day access rules apply.</p>
+          <p id="gm-copy-status" class="small" role="status"></p>
+          <button type="button" class="secondary" id="close-gm-code">Close</button>
+        </dialog>` : ""}
       ${locked ? `<div class="msg ok"><b>Signed and locked</b> by ${esc(state.signedBy || "coach")}${state.signedAtUtc ? " on " + esc(new Date(/Z$/i.test(state.signedAtUtc) ? state.signedAtUtc : state.signedAtUtc + "Z").toLocaleString()) : ""}.
         To change it, email <a href="mailto:info@tipinscoring.com">info@tipinscoring.com</a> to unlock it.</div>` : `<p class="muted small">${esc(need)}</p>`}
       <div id="banner">${banner}</div>
@@ -75,15 +79,29 @@ export async function renderLineup(app, teamId, gameId, navigate) {
         <button type="button" id="sign" ${dirty || !starters.size ? "disabled" : ""}>Sign &amp; lock</button></div>
         ${dirty ? `<p class="small muted">Save your changes before signing.</p>` : ""}`}`;
 
-    const copyCode = $("#copy-gm-code");
-    if (copyCode) copyCode.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(managerAccess.code);
-        $("#gm-copy-status").textContent = "Code copied.";
-      } catch {
-        $("#gm-copy-status").textContent = "Could not copy the code. Select and copy the code above.";
-      }
-    });
+    const accessDialog = $("#gm-access-dialog", app);
+    if (accessDialog) {
+      const copyStatus = $("#gm-copy-status", accessDialog);
+      $("#view-gm-code", app).addEventListener("click", () => {
+        copyStatus.textContent = "";
+        accessDialog.showModal();
+      });
+      $("#close-gm-code", accessDialog).addEventListener("click", () => accessDialog.close());
+      accessDialog.addEventListener("click", (event) => {
+        if (event.target !== accessDialog) return;
+        const bounds = accessDialog.getBoundingClientRect();
+        if (event.clientX < bounds.left || event.clientX > bounds.right
+          || event.clientY < bounds.top || event.clientY > bounds.bottom) accessDialog.close();
+      });
+      $("#copy-gm-code", accessDialog).addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(managerAccess.code);
+          copyStatus.textContent = "Code copied.";
+        } catch {
+          copyStatus.textContent = "Could not copy the code. Select and copy the code above.";
+        }
+      });
+    }
     app.querySelectorAll("[data-play]").forEach((b) => b.addEventListener("click", () => {
       const id = b.dataset.play;
       if (participants.has(id)) { participants.delete(id); starters.delete(id); } else participants.add(id);
