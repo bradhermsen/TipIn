@@ -16,6 +16,7 @@ Admins invite coaches to specific teams. Coaches get a mobile-first area where t
 | Team labels | Invitation email subjects/bodies and coach-site team lists, headers, and opponents use `Team Level - Type` (for example, `Riverbend JV - Boys`). Missing level/type values are omitted. Raw API team names are preserved; display labels are additive. |
 | Concurrent edits | Version check. Stale save rejected and the app reloads. No merge logic. |
 | Coach email | Automated verification email. |
+| External team contacts | Admin team saves retain head/assistant coach names and emails without directly creating or assigning portal users. Assistant direct-login switches are disabled for External organizations. External head coaches remain eligible for automated roster-site invitations; accepting an invitation grants coach access through the separate invitation flow. |
 | Jersey numbers | Per team. `Players.jerseyNumber` is only a default copied when a player is first added to a team. Two-way sync removed. |
 | Coach roster edits | Add players (with duplicate check), edit first/last name, position, grade, jersey number, soft-remove from own team. No birthdate. |
 | Name / grade | Person-level, apply to all teams, audited. |

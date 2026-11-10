@@ -1014,13 +1014,13 @@ function initTeamsPage() {
         assistantCoach4Email: document.getElementById("team-asst4-email").value,
 
         assistantCoach1HasLogin: document.getElementById("team-asst1-has-login")
-          .checked,
+          .checked && !inferredExternal,
         assistantCoach2HasLogin: document.getElementById("team-asst2-has-login")
-          .checked,
+          .checked && !inferredExternal,
         assistantCoach3HasLogin: document.getElementById("team-asst3-has-login")
-          .checked,
+          .checked && !inferredExternal,
         assistantCoach4HasLogin: document.getElementById("team-asst4-has-login")
-          .checked,
+          .checked && !inferredExternal,
 
         notes: document.getElementById("team-notes").value,
         gameManagerCode: getAccessCodeSuffix(document.getElementById("team-score-code").value),
@@ -1041,6 +1041,7 @@ function initTeamsPage() {
     teamOrg.addEventListener("change", () => {
       applyTeamMascotRules();
       updateAccessCodeGeneratorState();
+      wireAssistantCoachLoginToggles();
       populateTeamConferenceDropdown();
       populateTeamSectionDropdown();
     });
@@ -1068,11 +1069,18 @@ function wireAssistantCoachLoginToggles() {
 
     const update = () => {
       const hasEmail = emailEl.value.trim().length > 0;
-      toggleEl.disabled = !hasEmail;
-      if (!hasEmail) toggleEl.checked = false;
+      const orgId = document.getElementById("team-org")?.value || "";
+      const isExternal = orgId
+        ? isExternalOrganizationById(orgId)
+        : !!window.currentTeamIsExternal;
+      toggleEl.disabled = !hasEmail || isExternal;
+      toggleEl.title = isExternal
+        ? "Save external coach contact details here. Coach roster access is granted through invitations, not this login switch."
+        : "";
+      if (!hasEmail || isExternal) toggleEl.checked = false;
     };
 
-    emailEl.addEventListener("input", update);
+    emailEl.oninput = update;
     update();
   });
 }
@@ -1199,6 +1207,13 @@ const payload = AdminPage.config.collectFormData();
 
 let teamId;
   const orgId = payload.organizationId;
+  const isExternal = payload.isExternal || isExternalOrganizationById(orgId);
+  if (isExternal) {
+    payload.assistantCoach1HasLogin = false;
+    payload.assistantCoach2HasLogin = false;
+    payload.assistantCoach3HasLogin = false;
+    payload.assistantCoach4HasLogin = false;
+  }
 
   try {
     if (AdminPage.editingId) {
@@ -1213,6 +1228,7 @@ teamId = await TeamApi.create(payload);
     throw err;
   }
 
+if (!isExternal) {
 await ensureCoachUser(
     payload.headCoachName,
     payload.headCoachEmail,
@@ -1249,6 +1265,7 @@ await ensureCoachUser(ac.name, ac.email, orgId, teamId);
     } else {
 }
   }
+}
 
 AdminPage.closeModal();
   AdminPage.loadData();
