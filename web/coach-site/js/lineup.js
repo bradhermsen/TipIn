@@ -1,4 +1,4 @@
-import { api, ApiError } from "./api.js";
+import { api, ApiError, getSession } from "./api.js";
 import { $, esc, modal, toast, formatGameTime, positionLabel, needsLineup } from "./ui.js";
 import { teamHeader, wireTabs } from "./team.js";
 
@@ -24,14 +24,16 @@ export async function renderGames(app, teamId, navigate) {
 
 export async function renderLineup(app, teamId, gameId, navigate) {
   app.innerHTML = `<p class="muted">Loading lineup…</p>`;
-  let roster, state;
+  let roster, state, managerAccess;
   try {
-    [roster, state] = await Promise.all([
+    [roster, state, managerAccess] = await Promise.all([
       api(`/coach/teams/${teamId}/roster`),
       api(`/coach/games/${gameId}/teams/${teamId}/lineup`),
+      api(`/coach/games/${gameId}/teams/${teamId}/game-manager-access`),
     ]);
     validateState(state);
   } catch (err) {
+    if (err.status === 401 && !getSession()) return;
     app.innerHTML = `<div class="msg error">${esc(err.message)}</div><a href="/teams/${esc(teamId)}/games" data-link>‹ Games</a>`;
     return;
   }
@@ -49,6 +51,11 @@ export async function renderLineup(app, teamId, gameId, navigate) {
     const locked = state.locked;
     app.innerHTML = `<a class="small" href="/teams/${esc(teamId)}/games" data-link>‹ Games</a>
       <h1>Game lineup</h1>
+      ${managerAccess.code ? `<section class="card"><h2>Game Manager Access</h2>
+        <p>Home game managed by TipIn. Use this team's existing code in the Game Manager app.</p>
+        <p><strong id="gm-code">${esc(managerAccess.code)}</strong> <button type="button" class="secondary" id="copy-gm-code">Copy code</button></p>
+        <p class="small muted">Head coach only. Share only with your authorized scorekeeper. Existing game-day access rules apply.</p>
+        <p id="gm-copy-status" class="small" role="status"></p></section>` : ""}
       ${locked ? `<div class="msg ok"><b>Signed and locked</b> by ${esc(state.signedBy || "coach")}${state.signedAtUtc ? " on " + esc(new Date(/Z$/i.test(state.signedAtUtc) ? state.signedAtUtc : state.signedAtUtc + "Z").toLocaleString()) : ""}.
         To change it, email <a href="mailto:info@tipinscoring.com">info@tipinscoring.com</a> to unlock it.</div>` : `<p class="muted small">${esc(need)}</p>`}
       <div id="banner">${banner}</div>
@@ -68,6 +75,15 @@ export async function renderLineup(app, teamId, gameId, navigate) {
         <button type="button" id="sign" ${dirty || !starters.size ? "disabled" : ""}>Sign &amp; lock</button></div>
         ${dirty ? `<p class="small muted">Save your changes before signing.</p>` : ""}`}`;
 
+    const copyCode = $("#copy-gm-code");
+    if (copyCode) copyCode.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(managerAccess.code);
+        $("#gm-copy-status").textContent = "Code copied.";
+      } catch {
+        $("#gm-copy-status").textContent = "Could not copy the code. Select and copy the code above.";
+      }
+    });
     app.querySelectorAll("[data-play]").forEach((b) => b.addEventListener("click", () => {
       const id = b.dataset.play;
       if (participants.has(id)) { participants.delete(id); starters.delete(id); } else participants.add(id);

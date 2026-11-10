@@ -20,6 +20,7 @@ import {
   getTeams,
   getTeamsByOrganization,
 } from "../api/gameViewApi";
+import { centralDayKey, isScheduledToday } from "./gameCalendar";
 
 const CLOSED_STATUSES = new Set([
   "FINAL",
@@ -295,6 +296,8 @@ export async function fetchFilterData(
 export async function fetchNextGamesByTeam(
   filters: GameViewFilters,
   snapshot?: GameViewSnapshot,
+  section: "live" | "today" = "live",
+  now = new Date(),
 ): Promise<NextGameCardModel[]> {
   const scoped = await loadScopedTeams(filters, snapshot);
   const teamMap = new Map(
@@ -312,7 +315,7 @@ export async function fetchNextGamesByTeam(
       if (!filteredTeamIds.has(homeId) && !filteredTeamIds.has(awayId))
         return false;
 
-      return isLiveStatus(game.status);
+      return section === "live" ? isLiveStatus(game.status) : isScheduledToday(game, now);
     })
     .sort((a, b) => {
       const aLive = isLiveStatus(a.status) ? 0 : 1;
@@ -366,7 +369,7 @@ export async function fetchNextGamesByTeam(
           buildTeamContextLabel(homeTeam || awayTeam),
         ),
         teamContextLabel: buildTeamContextLabel(homeTeam || awayTeam),
-        startTimeIso: new Date(game.gameDateTime).toISOString(),
+        startTimeIso: section === "today" ? game.gameDateTime : new Date(game.gameDateTime).toISOString(),
         status,
         isLive: isLiveStatus(status),
         homeScore,
@@ -381,6 +384,10 @@ export async function fetchNextGamesByTeam(
   );
 
   return cards.sort((a, b) => a.startTimeIso.localeCompare(b.startTimeIso));
+}
+
+export function fetchTodaysGames(filters: GameViewFilters, snapshot?: GameViewSnapshot, now = new Date()) {
+  return fetchNextGamesByTeam(filters, snapshot, "today", now);
 }
 
 export async function fetchUpcomingSchedule(
@@ -411,7 +418,7 @@ export async function fetchUpcomingSchedule(
       const startMs = new Date(game.gameDateTime).getTime();
       if (Number.isNaN(startMs)) return false;
 
-      return true;
+      return centralDayKey(game.gameDateTime) > centralDayKey(new Date());
     })
     .sort(
       (a, b) =>

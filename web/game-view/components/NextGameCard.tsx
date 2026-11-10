@@ -9,17 +9,21 @@ interface Props {
 
 export function NextGameCard({ game, onClick }: Props) {
   const start = new Date(game.startTimeIso);
+  const centralOptions = !game.isLive && /(?:Z|[+-]\d{2}:\d{2})$/i.test(game.startTimeIso)
+    ? { timeZone: "America/Chicago" } : {};
   const dateText = Number.isNaN(start.getTime())
     ? "TBD"
     : start.toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
+        ...centralOptions,
       });
   const timeText = Number.isNaN(start.getTime())
     ? ""
     : start.toLocaleTimeString(undefined, {
         hour: "numeric",
         minute: "2-digit",
+        ...centralOptions,
       });
 
   const showScore =
@@ -35,7 +39,7 @@ export function NextGameCard({ game, onClick }: Props) {
       onClick={() => onClick(game.gameId)}
     >
       <div className="game-view-next-card-top">
-        <p className="game-view-card-eyebrow">In Progress</p>
+        <p className="game-view-card-eyebrow">{game.isLive ? "In Progress" : "Today"}</p>
         {game.isTipInManaged ? <ManagedBadge /> : null}
         {game.isLive ? <span className="game-view-live-pill">LIVE</span> : null}
       </div>
@@ -45,6 +49,7 @@ export function NextGameCard({ game, onClick }: Props) {
       <p className="game-view-next-card-meta">
         {dateText}
         {timeText ? ` • ${timeText}` : ""}
+        {!game.isLive && timeText ? " Central" : ""}
       </p>
       <p className="game-view-next-card-status">Status: {game.status}</p>
 

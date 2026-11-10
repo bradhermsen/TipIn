@@ -3,6 +3,7 @@ import { $, esc, formatGameTime, needsLineup } from "./ui.js";
 import { renderRoster } from "./roster.js";
 import { renderGames, renderLineup } from "./lineup.js";
 import { renderCoaches } from "./coaches.js";
+import { loginPath, loginDestination } from "./navigation.js";
 
 const app = $("#app");
 const topbar = $("#topbar");
@@ -30,7 +31,10 @@ document.addEventListener("click", (e) => {
   }
 });
 window.addEventListener("popstate", route);
-window.addEventListener("session-expired", () => navigate("/login", true));
+window.addEventListener("session-expired", () => {
+  const destination = location.pathname === "/login" ? loginDestination(location.search) : location.pathname;
+  navigate(loginPath(destination), true);
+});
 $("#signout").addEventListener("click", async () => {
   await logout();
   navigate("/login", true);
@@ -71,7 +75,7 @@ function renderLogin(notice) {
     busy(btn, true, "Signing in…");
     try {
       await login($("#email").value.trim(), $("#pw").value, $("#keep").checked);
-      navigate("/", true);
+      navigate(loginDestination(location.search), true);
     } catch (err) {
       $("#err").innerHTML = msg("error", err.status === 401 ? "Incorrect email or password." : err.message);
       busy(btn, false, "Sign in");
@@ -231,11 +235,11 @@ export async function route() {
   const isPublic = publicRoutes.includes(path);
 
   topbar.hidden = isPublic || !session;
-  if (!isPublic && !session) return navigate("/login", true);
+  if (!isPublic && !session) return navigate(loginPath(path), true);
   window.scrollTo(0, 0);
 
   if (path === "/login") {
-    if (session) return navigate("/", true);
+    if (session) return navigate(loginDestination(location.search), true);
     const notice = new URLSearchParams(location.search).get("reset") ? msg("ok", "Password updated. Sign in with your new password.") : "";
     return renderLogin(notice);
   }

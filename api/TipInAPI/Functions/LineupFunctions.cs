@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using System.Threading;
 using Dapper;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -143,6 +144,20 @@ namespace TipInAPI.Functions
             var (_, error) = await AuthorizeCoachAsync(req, teamId, false);
             if (error != null) return error;
             return await ToResponseAsync(req, await _service.GetAsync(gameId, teamId));
+        }
+
+        [Function("CoachGetGameManagerAccess")]
+        public async Task<HttpResponseData> CoachGetGameManagerAccess(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/games/{gameId:guid}/teams/{teamId:guid}/game-manager-access")] HttpRequestData req,
+            Guid gameId, Guid teamId, CancellationToken cancellationToken)
+        {
+            var (caller, error) = await AuthorizeCoachAsync(req, teamId, false);
+            if (error != null) return error;
+            var result = await _service.GetGameManagerAccessAsync(gameId, teamId, caller!.UserId, cancellationToken);
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Cache-Control", "no-store");
+            await response.WriteAsJsonAsync(result, cancellationToken);
+            return response;
         }
 
         [Function("CoachSaveLineup")]

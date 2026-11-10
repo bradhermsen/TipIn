@@ -570,6 +570,26 @@ window.PageContentRegistry["settings-email"] = () => `
       <button id="settings-save-email" class="nf-btn nf-btn-primary" type="button">Save Email Server Settings</button>
     </div>
     <div id="settings-email-save-status" class="settings-save-status" aria-live="polite"></div>
+    <section id="coach-email-automation" class="mt-4" hidden>
+      <h3 class="section-header">Automated Coach Emails</h3>
+      <p class="settings-helper-text">Global controls for all organizations. Manual invitations are unaffected.
+        Email Enabled above must also be on. Times are Central.</p>
+      <fieldset id="coach-automation-fields" disabled>
+        <div class="settings-toggle-row">
+          <label class="settings-toggle"><input id="automation-invitations" type="checkbox" />
+            <span>Automatic head-coach invitations</span></label>
+          <label class="settings-toggle"><input id="automation-rosters" type="checkbox" />
+            <span>Three-day roster reminders (9 AM)</span></label>
+          <label class="settings-toggle"><input id="automation-lineups" type="checkbox" />
+            <span>Game-day lineup reminders (8 AM)</span></label>
+        </div>
+        <p class="settings-helper-text">Games before 10 AM get their lineup reminder at 6 PM the prior evening.
+          Invitations are sent only to the Admin-listed head coach when access is missing.</p>
+        <button id="settings-save-automation" class="nf-btn nf-btn-primary" type="button">Save Automation Settings</button>
+      </fieldset>
+      <p id="automation-deployment-status" class="settings-helper-text"></p>
+      <div id="automation-save-status" class="settings-save-status" role="status" aria-live="polite"></div>
+    </section>
   </div>
 
   <div class="nf-card settings-card mt-4">

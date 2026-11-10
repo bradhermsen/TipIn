@@ -1,0 +1,27 @@
+@baseUrl = http://localhost:7071/api
+@superAdminToken = REPLACE_WITH_SUPERADMIN_TOKEN
+@headCoachToken = REPLACE_WITH_HEAD_COACH_TOKEN
+@teamId = 11111111-2222-3333-4444-555555555555
+@gameId = aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+
+### Global controls: SuperAdmin only
+GET {{baseUrl}}/email/automation
+Authorization: Bearer {{superAdminToken}}
+
+### All automations off; manual invitations remain available
+PUT {{baseUrl}}/email/automation
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "automaticInvitations": false,
+  "rosterReminders": false,
+  "lineupReminders": false
+}
+
+### Head coach of a managed home game: private GM code, otherwise code:null
+GET {{baseUrl}}/coach/games/{{gameId}}/teams/{{teamId}}/game-manager-access
+Authorization: Bearer {{headCoachToken}}
+
+### Unauthenticated requests must return 401
+GET {{baseUrl}}/coach/games/{{gameId}}/teams/{{teamId}}/game-manager-access

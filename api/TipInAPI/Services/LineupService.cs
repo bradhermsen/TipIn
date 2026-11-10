@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
 using TipInAPI.Infrastructure.Database;
@@ -48,6 +50,7 @@ namespace TipInAPI.Services
 
     public interface ILineupService
     {
+        Task<CoachGameManagerAccessResponse> GetGameManagerAccessAsync(Guid gameId, Guid teamId, Guid actorId, CancellationToken cancellationToken = default);
         Task<CoachRosterResult> GetAsync(Guid gameId, Guid teamId);
         Task<CoachRosterResult> SaveAsync(Guid gameId, Guid teamId, LineupActor actor, SaveLineupRequest request);
         Task<CoachRosterResult> SignAsync(Guid gameId, Guid teamId, LineupActor actor, SignLineupRequest request);
@@ -57,6 +60,9 @@ namespace TipInAPI.Services
         Task<(Guid HomeTeamId, Guid AwayTeamId)?> GetGameTeamsAsync(Guid gameId);
         Task<IEnumerable<CoachGameItem>> ListGamesForTeamAsync(Guid teamId);
     }
+
+    /// <summary>Private access code available only to the assigned home head coach of a managed game.</summary>
+    public sealed record CoachGameManagerAccessResponse(string? Code);
 
     public class CoachGameItem
     {
@@ -82,6 +88,31 @@ namespace TipInAPI.Services
         public LineupService(ISqlConnectionFactory db)
         {
             _db = db;
+        }
+
+        public async Task<CoachGameManagerAccessResponse> GetGameManagerAccessAsync(Guid gameId, Guid teamId, Guid actorId,
+            CancellationToken cancellationToken = default)
+        {
+            using var conn = _db.CreateConnection();
+            var code = await conn.QuerySingleOrDefaultAsync<string>(new CommandDefinition(@"
+                SELECT t.ScorekeeperCode FROM dbo.Games g
+                JOIN dbo.Teams t ON t.Id=g.HomeTeamId
+                JOIN dbo.Organizations o ON o.OrganizationId=t.OrganizationId
+                JOIN dbo.AuthUsers a ON a.Id=@actorId
+                WHERE g.GameId=@gameId AND t.Id=@teamId AND t.IsActive=1 AND o.OrganizationType='Managed'
+                    AND a.IsActive=1 AND LOWER(LTRIM(RTRIM(a.Email)))=LOWER(LTRIM(RTRIM(t.HeadCoachEmail)))
+                    AND (a.Role='SuperAdmin'
+                        OR (a.Role='OrgAdmin' AND EXISTS (SELECT 1 FROM dbo.Users u
+                            WHERE u.Id=a.Id AND u.OrganizationId=t.OrganizationId))
+                        OR (a.Role IN ('Coach','TeamManager') AND EXISTS
+                            (SELECT 1 FROM dbo.CoachTeams ct WHERE ct.TeamId=t.Id AND ct.UserId=a.Id)));",
+                new { gameId, teamId, actorId }, cancellationToken: cancellationToken));
+            if (string.IsNullOrWhiteSpace(code)) return new(null);
+            code = code.Trim().ToUpperInvariant();
+            if (!code.StartsWith("GM-", StringComparison.Ordinal)) code = "GM-" + code;
+            if (!Regex.IsMatch(code, @"^GM-[A-Z0-9]{6}$"))
+                throw new InvalidOperationException("The team's Game Manager code is invalid. Ask an administrator to regenerate it.");
+            return new(code);
         }
 
         private sealed class GameRow

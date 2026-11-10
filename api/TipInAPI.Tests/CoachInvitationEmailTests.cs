@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net.Mail;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -46,7 +47,10 @@ namespace TipInAPI.Tests
                 Assert.Contains(CoachInvitationEmail.GameViewUrl, email.BodyText);
                 Assert.Contains("Set Up Your Roster", email.BodyHtml);
                 Assert.Contains("mailto:info@tipinscoring.com", email.BodyHtml);
-                var qr = Assert.Single(email.InlineImages);
+                var qr = Assert.Single(email.InlineImages, i => i.ContentId == "tipin-gameview-qr");
+                var logo = Assert.Single(email.InlineImages, i => i.ContentId == "tipin-logo");
+                Assert.Contains("cid:tipin-logo", email.BodyHtml);
+                Assert.True(logo.Content.Length > 1000);
                 Assert.Equal("image/png", qr.ContentType);
                 Assert.Contains($"cid:{qr.ContentId}", email.BodyHtml);
                 Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, qr.Content[..8]);
@@ -97,7 +101,7 @@ namespace TipInAPI.Tests
             Assert.Equal("text/plain", message.AlternateViews[0].ContentType.MediaType);
             var html = message.AlternateViews[1];
             Assert.Equal("text/html", html.ContentType.MediaType);
-            Assert.Single(html.LinkedResources);
+            Assert.Equal(2, html.LinkedResources.Count);
             Assert.Equal(request.InlineImages[0].ContentId, html.LinkedResources[0].ContentId);
             Assert.Equal("image/png", html.LinkedResources[0].ContentType.MediaType);
             using var plain = new MailMessage { Body = "Existing scoresheet text" };
@@ -133,6 +137,7 @@ namespace TipInAPI.Tests
                 Assert.Contains("text/html", mime);
                 Assert.Contains("image/png", mime);
                 Assert.Contains("Content-ID: <tipin-gameview-qr>", mime, StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("Content-ID: <tipin-logo>", mime, StringComparison.OrdinalIgnoreCase);
             }
             finally
             {

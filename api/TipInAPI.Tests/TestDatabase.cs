@@ -170,6 +170,8 @@ namespace TipInAPI.Tests
 
             // Players are matched by organization, so players created through the service are cleaned up too
             conn.Execute(@"
+                IF OBJECT_ID('dbo.CoachReminderDeliveries','U') IS NOT NULL
+                    DELETE FROM dbo.CoachReminderDeliveries WHERE TeamId IN @teams;
                 DELETE FROM RosterAuditLog WHERE TeamId IN @teams;
                 DELETE FROM RosterEntries WHERE TeamId IN @teams;
                 DELETE FROM PlayerTeams WHERE TeamId IN @teams;

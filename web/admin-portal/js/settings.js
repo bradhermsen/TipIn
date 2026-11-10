@@ -636,6 +636,7 @@ function escapeHtml(value) {
 }
 
 async function loadEmailSettings() {
+  await loadCoachEmailAutomation();
   try {
     const settings = await EmailSettingsApi.getSettings();
 
@@ -674,6 +675,50 @@ async function loadEmailSettings() {
     console.error("Failed to load email settings", error);
     notifySettings("Failed to load email settings", "error");
   }
+}
+
+async function loadCoachEmailAutomation() {
+  const section = document.getElementById("coach-email-automation");
+  if (!section || !Auth.hasRole(window.ROLES.SuperAdmin)) return;
+  section.hidden = false;
+  const fields = document.getElementById("coach-automation-fields");
+  const status = document.getElementById("automation-save-status");
+  const button = document.getElementById("settings-save-automation");
+  fields.disabled = true;
+  try {
+    applyAutomationSettings(await EmailSettingsApi.getAutomation());
+    fields.disabled = false;
+    status.textContent = "";
+    button.onclick = async () => {
+      fields.disabled = true;
+      status.textContent = "Saving automation settings...";
+      try {
+        applyAutomationSettings(await EmailSettingsApi.saveAutomation({
+          automaticInvitations: getCheckboxValue("automation-invitations"),
+          rosterReminders: getCheckboxValue("automation-rosters"),
+          lineupReminders: getCheckboxValue("automation-lineups"),
+        }));
+        status.textContent = "Automation settings saved.";
+      } catch (error) {
+        console.error("Failed to save coach email automation", error);
+        status.textContent = error.message || "Failed to save automation settings.";
+      } finally {
+        fields.disabled = false;
+      }
+    };
+  } catch (error) {
+    console.error("Failed to load coach email automation", error);
+    status.textContent = error.message || "Failed to load automation settings. Reload to try again.";
+  }
+}
+
+function applyAutomationSettings(settings) {
+  setCheckboxValue("automation-invitations", settings.automaticInvitations);
+  setCheckboxValue("automation-rosters", settings.rosterReminders);
+  setCheckboxValue("automation-lineups", settings.lineupReminders);
+  document.getElementById("automation-deployment-status").textContent = settings.deploymentPaused
+    ? "Automatic delivery is paused by deployment configuration. Saved switches will take effect only after that pause is removed."
+    : "Changes apply to subsequent delivery checks. An email already being sent may still complete.";
 }
 
 async function saveEmailServerSettings() {

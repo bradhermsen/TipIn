@@ -11,6 +11,7 @@ import {
   fetchLastFinalGamesByTeam,
   fetchNextGamesByTeam,
   fetchUpcomingSchedule,
+  fetchTodaysGames,
 } from "../services/gameViewService";
 import type {
   GameViewFilterData,
@@ -94,6 +95,8 @@ export function GameViewMainScreen() {
     teamLevels: [],
   });
   const [nextGames, setNextGames] = useState<NextGameCardModel[]>([]);
+  const [todaysGames, setTodaysGames] = useState<NextGameCardModel[]>([]);
+  const [todayPage, setTodayPage] = useState(1);
   const [upcomingGames, setUpcomingGames] = useState<
     UpcomingScheduleItemModel[]
   >([]);
@@ -112,9 +115,12 @@ export function GameViewMainScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    let loading = false;
 
-    async function load() {
-      setIsLoading(true);
+    async function load(background = false) {
+      if (loading) return;
+      loading = true;
+      if (!background) setIsLoading(true);
       setErrorMessage("");
 
       try {
@@ -150,10 +156,11 @@ export function GameViewMainScreen() {
 
         setFilterData(scopedFilterData);
 
-        const [cards, schedule, finals] = await Promise.all([
+        const [cards, schedule, finals, today] = await Promise.all([
           fetchNextGamesByTeam(filters, snapshot),
           fetchUpcomingSchedule(filters, snapshot),
           fetchLastFinalGamesByTeam(filters, snapshot),
+          fetchTodaysGames(filters, snapshot),
         ]);
 
         if (cancelled) return;
@@ -161,10 +168,12 @@ export function GameViewMainScreen() {
         setNextGames(cards);
         setUpcomingGames(schedule);
         setLastFinalGames(finals);
+        setTodaysGames(today);
       } catch (error) {
         if (cancelled) return;
         setErrorMessage(mapUiErrorMessage(error));
       } finally {
+        loading = false;
         if (!cancelled) {
           setIsLoading(false);
         }
@@ -172,9 +181,11 @@ export function GameViewMainScreen() {
     }
 
     void load();
+    const timer = window.setInterval(() => { void load(true); }, 15000);
 
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [filters]);
 
@@ -202,6 +213,15 @@ export function GameViewMainScreen() {
     });
   }, [upcomingGames, searchQuery]);
 
+  const visibleTodaysGames = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return todaysGames.filter((game) => !query || [game.teamName, game.opponentName, game.status, game.teamContextLabel]
+      .join(" ").toLowerCase().includes(query));
+  }, [todaysGames, searchQuery]);
+  const todayTotalPages = Math.max(1, Math.ceil(visibleTodaysGames.length / PAGE_SIZE));
+  const currentTodayPage = Math.min(todayPage, todayTotalPages);
+  const pagedTodaysGames = visibleTodaysGames.slice((currentTodayPage - 1) * PAGE_SIZE, currentTodayPage * PAGE_SIZE);
+
   const visibleLastFinalGames = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return lastFinalGames;
@@ -223,6 +243,7 @@ export function GameViewMainScreen() {
     setNextGamesPage(1);
     setUpcomingPage(1);
     setFinalsPage(1);
+    setTodayPage(1);
   }, [filters, searchQuery]);
 
   const nextGamesTotalPages = Math.max(
@@ -478,6 +499,26 @@ export function GameViewMainScreen() {
                 Next
               </button>
             </div>
+          </section>
+
+          <section className="game-view-section">
+            <h2 className="game-view-section-title">Today's Games</h2>
+            {pagedTodaysGames.length === 0 ? (
+              <p className="game-view-empty-text">No scheduled games today for current filters.</p>
+            ) : (
+              <div className="game-view-card-grid">
+                {pagedTodaysGames.map((game) => (
+                  <NextGameCard key={game.gameId} game={game} onClick={handleGameCardClick} />
+                ))}
+              </div>
+            )}
+            {todayTotalPages > 1 ? <div className="game-view-pagination">
+              <button type="button" className="game-view-tab" disabled={currentTodayPage <= 1}
+                onClick={() => setTodayPage(currentTodayPage - 1)}>Prev</button>
+              <span className="game-view-pagination-text">Page {currentTodayPage} of {todayTotalPages}</span>
+              <button type="button" className="game-view-tab" disabled={currentTodayPage >= todayTotalPages}
+                onClick={() => setTodayPage(currentTodayPage + 1)}>Next</button>
+            </div> : null}
           </section>
 
           <section className="game-view-section">

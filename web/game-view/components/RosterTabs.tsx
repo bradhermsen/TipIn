@@ -116,6 +116,9 @@ export function RosterTabs({
           <p className="game-view-empty-text">No roster data available.</p>
         ) : (
           <div className="game-view-roster-grid-wrap">
+            {!rows.some((row) => row.isStarter) ? (
+              <p className="game-view-roster-notice">Starting lineup not yet available.</p>
+            ) : null}
             <div className="game-view-roster-section">
               <h3 className="game-view-roster-subtitle">
                 Forward / Defenseman
