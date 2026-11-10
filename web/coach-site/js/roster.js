@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { $, esc, modal, toast, POSITIONS, positionLabel } from "./ui.js";
 import { teamHeader, wireTabs } from "./team.js";
+import { openRosterImage } from "./roster-image.js";
 
 const positionOptions = (selected) =>
   POSITIONS.map(([v, l]) => `<option value="${v}" ${v === (selected || "") ? "selected" : ""}>${l}</option>`).join("");
@@ -25,6 +26,7 @@ export async function renderRoster(app, teamId, navigate) {
   app.innerHTML = `${header}
     <div class="row spread"><span class="muted">${roster.length} player${roster.length === 1 ? "" : "s"}</span>
       <button type="button" id="add">+ Add player</button></div>
+    <button type="button" class="secondary block" id="import-image">Import roster from image</button>
     <div class="card" style="margin-top:12px">
       ${roster.length ? roster.map((p) => `
         <div class="player">
@@ -37,6 +39,7 @@ export async function renderRoster(app, teamId, navigate) {
   wireTabs(app, navigate);
 
   $("#add").addEventListener("click", () => openAdd(teamId, reload));
+  $("#import-image").onclick = () => openRosterImage(teamId, reload);
   app.querySelectorAll("[data-edit]").forEach((b) =>
     b.addEventListener("click", () => openEdit(teamId, roster.find((p) => p.rosterEntryId === b.dataset.edit), reload))
   );

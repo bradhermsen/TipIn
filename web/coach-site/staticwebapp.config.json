@@ -1,7 +1,7 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/css/*", "/js/*", "/config.json"]
+    "exclude": ["/assets/*", "/css/*", "/js/*", "/vendor/*", "/config.json"]
   },
   "globalHeaders": {
     "Referrer-Policy": "no-referrer",

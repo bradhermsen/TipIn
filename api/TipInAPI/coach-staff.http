@@ -1,0 +1,28 @@
+@baseUrl = http://localhost:7071/api
+@token = replace-with-coach-access-token
+@teamId = 11111111-1111-1111-1111-111111111111
+
+### Staff listings; head coach is read-only
+GET {{baseUrl}}/coach/teams/{{teamId}}/staff
+Authorization: Bearer {{token}}
+
+### Add/edit assistant slot (use expected values from GET; null for an empty slot)
+PUT {{baseUrl}}/coach/teams/{{teamId}}/staff/assistants/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"name":"Sample Assistant","email":null,"expectedName":null,"expectedEmail":null}
+
+### Remove a staff listing without revoking account access
+PUT {{baseUrl}}/coach/teams/{{teamId}}/staff/assistants/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"name":null,"email":null,"expectedName":"Sample Assistant","expectedEmail":null}
+
+### Invalid: cannot update head coach through assistant endpoint
+PUT {{baseUrl}}/coach/teams/{{teamId}}/staff/assistants/0
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"name":"Not allowed"}

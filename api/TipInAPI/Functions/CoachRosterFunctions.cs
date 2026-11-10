@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using TipInAPI.Infrastructure.Authorization;
 using TipInAPI.Services;
+using TipInAPI.DTOs;
 
 namespace TipInAPI.Functions
 {
@@ -109,6 +110,30 @@ namespace TipInAPI.Functions
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(await _service.GetRosterAsync(teamId));
             return response;
+        }
+
+        [Function("CoachGetStaff")]
+        public async Task<HttpResponseData> GetStaff(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/teams/{teamId:guid}/staff")] HttpRequestData req,
+            Guid teamId)
+        {
+            var (_, error) = await AuthorizeAsync(req, teamId);
+            if (error != null) return error;
+            return await ToResponseAsync(req, await _service.GetStaffAsync(teamId));
+        }
+
+        [Function("CoachUpdateAssistant")]
+        public async Task<HttpResponseData> UpdateAssistant(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "coach/teams/{teamId:guid}/staff/assistants/{slot:int}")] HttpRequestData req,
+            Guid teamId, int slot)
+        {
+            var (_, error) = await AuthorizeAsync(req, teamId);
+            if (error != null) return error;
+            UpdateAssistantRequest? body;
+            try { body = await req.ReadFromJsonAsync<UpdateAssistantRequest>(); }
+            catch (System.Text.Json.JsonException) { return await AuthorizationHelper.BadRequestResponse(req, "Invalid JSON payload"); }
+            if (body == null) return await AuthorizationHelper.BadRequestResponse(req, "Request body is required");
+            return await ToResponseAsync(req, await _service.UpdateAssistantAsync(teamId, slot, body));
         }
 
         [Function("CoachSearchPlayers")]

@@ -14,12 +14,59 @@ using Microsoft.Extensions.DependencyInjection;
 using TipInAPI.Functions;
 using TipInAPI.Infrastructure.Authorization;
 using TipInAPI.Services;
+using TipInAPI.Repositories;
 using Xunit;
 
 namespace TipInAPI.Tests
 {
     public class CoachHttpResponseTests
     {
+        [Theory]
+        [InlineData("Coach", true, HttpStatusCode.OK)]
+        [InlineData("TeamManager", true, HttpStatusCode.OK)]
+        [InlineData("Coach", false, HttpStatusCode.Forbidden)]
+        [InlineData("TeamManager", false, HttpStatusCode.Forbidden)]
+        [InlineData("Viewer", true, HttpStatusCode.Forbidden)]
+        [InlineData("OrgAdmin", true, HttpStatusCode.OK)]
+        [InlineData("OrgAdmin", false, HttpStatusCode.Forbidden)]
+        [InlineData("SuperAdmin", false, HttpStatusCode.OK)]
+        public async Task StaffEndpoints_EnforceRosterRoleAndTeamScope(string role, bool assigned, HttpStatusCode expected)
+        {
+            using var db = new TestDatabase();
+            using var services = CreateServices();
+            var user = role == "OrgAdmin" ? db.HostAdminId : db.AddCoach(db.HostTeamId);
+            var team = assigned ? db.HostTeamId : db.OtherTeamId;
+            var functions = new CoachRosterFunctions(new CoachRosterService(db.Factory),
+                new TestAuthorization(user, role), new TeamAuthorizationService(db.Factory),
+                new CoachTeamsService(new CoachTeamsRepository(db.Factory)));
+            var request = new TestRequest(new TestContext(services));
+            request.Headers.Add("Authorization", "Bearer fixture");
+            Assert.Equal(expected, (await functions.GetStaff(request, team)).StatusCode);
+            await JsonSerializer.SerializeAsync(request.Body, new { name = "Test Assistant" });
+            request.Body.Position = 0;
+            Assert.Equal(expected, (await functions.UpdateAssistant(request, team, 1)).StatusCode);
+        }
+
+        [Fact]
+        public async Task StaffEndpoints_RequireAuthentication()
+        {
+            using var services = CreateServices();
+            var functions = new CoachRosterFunctions(null!, null!, null!, null!);
+            var request = new TestRequest(new TestContext(services));
+            Assert.Equal(HttpStatusCode.Unauthorized, (await functions.GetStaff(request, Guid.NewGuid())).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await functions.UpdateAssistant(request, Guid.NewGuid(), 1)).StatusCode);
+        }
+
+        private sealed class TestAuthorization : IAuthorizationService
+        {
+            private readonly Guid _user;
+            private readonly string _role;
+            public TestAuthorization(Guid user, string role) { _user = user; _role = role; }
+            public (bool IsValid, string UserId, string Role) ValidateToken(string bearerToken) => (true, _user.ToString(), _role);
+            public bool HasRole(string role, params string[] allowedRoles) => Array.IndexOf(allowedRoles, role) >= 0;
+            public bool HasAnyRole(string role, params string[] allowedRoles) => HasRole(role, allowedRoles);
+        }
+
         [Theory]
         [InlineData(typeof(LineupFunctions))]
         [InlineData(typeof(CoachRosterFunctions))]

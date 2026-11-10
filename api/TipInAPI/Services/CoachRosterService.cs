@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
+using TipInAPI.DTOs;
 using TipInAPI.Infrastructure.Database;
 
 namespace TipInAPI.Services
@@ -68,6 +69,8 @@ namespace TipInAPI.Services
 
     public interface ICoachRosterService
     {
+        Task<CoachRosterResult> GetStaffAsync(Guid teamId);
+        Task<CoachRosterResult> UpdateAssistantAsync(Guid teamId, int slot, UpdateAssistantRequest request);
         Task<IEnumerable<CoachRosterPlayer>> GetRosterAsync(Guid teamId);
         Task<CoachRosterResult> SearchPlayersAsync(Guid teamId, string query);
         Task<CoachRosterResult> AddPlayerAsync(Guid actorId, Guid teamId, AddRosterPlayerRequest request);
@@ -85,6 +88,46 @@ namespace TipInAPI.Services
         }
 
         private static string Clean(string? value) => (value ?? "").Trim();
+
+        public async Task<CoachRosterResult> GetStaffAsync(Guid teamId)
+        {
+            using var conn = _db.CreateConnection();
+            var exists = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Teams WHERE Id = @teamId", new { teamId });
+            if (exists == 0) return CoachRosterResult.NotFound("Team not found.");
+            var staff = await conn.QueryAsync<CoachStaffDto>(@"
+                SELECT 0 AS Slot, 'Head Coach' AS Title, HeadCoachName AS Name, HeadCoachEmail AS Email FROM Teams WHERE Id = @teamId
+                UNION ALL SELECT 1, 'Assistant Coach', AssistantCoach1Name, AssistantCoach1Email FROM Teams WHERE Id = @teamId
+                UNION ALL SELECT 2, 'Assistant Coach', AssistantCoach2Name, AssistantCoach2Email FROM Teams WHERE Id = @teamId
+                UNION ALL SELECT 3, 'Assistant Coach', AssistantCoach3Name, AssistantCoach3Email FROM Teams WHERE Id = @teamId
+                UNION ALL SELECT 4, 'Assistant Coach', AssistantCoach4Name, AssistantCoach4Email FROM Teams WHERE Id = @teamId
+                ORDER BY Slot;", new { teamId });
+            return CoachRosterResult.Ok(staff.ToList());
+        }
+
+        public async Task<CoachRosterResult> UpdateAssistantAsync(Guid teamId, int slot, UpdateAssistantRequest request)
+        {
+            if (slot < 1 || slot > 4) return CoachRosterResult.Invalid("Assistant slot must be between 1 and 4. The head coach is managed by an administrator.");
+            var name = Clean(request.Name);
+            var email = Clean(request.Email);
+            if (name.Length > 100) return CoachRosterResult.Invalid("Name must be 100 characters or fewer.");
+            if (email.Length > 254 || (email.Length > 0 && !System.Net.Mail.MailAddress.TryCreate(email, out _)))
+                return CoachRosterResult.Invalid("Enter a valid email address or leave it blank.");
+            if (name.Length == 0 && email.Length > 0) return CoachRosterResult.Invalid("An assistant name is required when an email is provided.");
+
+            using var conn = _db.CreateConnection();
+            // Only a validated numeric slot is interpolated; all user input is parameterized.
+            var updated = await conn.ExecuteAsync($@"
+                UPDATE Teams SET AssistantCoach{slot}Name = NULLIF(@name, ''),
+                    AssistantCoach{slot}Email = NULLIF(@email, ''), UpdatedAt = SYSUTCDATETIME()
+                WHERE Id = @teamId
+                  AND ISNULL(AssistantCoach{slot}Name, '') = ISNULL(@expectedName, '')
+                  AND ISNULL(AssistantCoach{slot}Email, '') = ISNULL(@expectedEmail, '');",
+                new { teamId, name, email, expectedName = request.ExpectedName, expectedEmail = request.ExpectedEmail });
+            if (updated == 1) return CoachRosterResult.Ok();
+            var exists = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM Teams WHERE Id = @teamId", new { teamId });
+            return exists == 0 ? CoachRosterResult.NotFound("Team not found.")
+                : CoachRosterResult.Warning("This staff listing changed. Reload the Coaches tab before editing it again.", new { code = "STAFF_CHANGED" });
+        }
 
         private sealed class ExistingPlayerRow
         {
