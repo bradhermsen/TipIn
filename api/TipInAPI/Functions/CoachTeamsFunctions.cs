@@ -1,5 +1,6 @@
 using System;
 using System.Net;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -25,11 +26,16 @@ namespace TipInAPI.Functions
             _teamAuthorizationService = teamAuthorizationService;
         }
 
+        // Host admins may also manage visiting coaches on teams they can invite to; the coach must be assigned to that team
         private async Task<bool> CanAdminTargetAsync(string adminUserId, string role, Guid teamId, Guid targetUserId)
         {
             var admin = Guid.Parse(adminUserId);
-            return await _teamAuthorizationService.CanAdminAccessTeamAsync(admin, role, teamId)
-                && await _teamAuthorizationService.CanAdminAccessUserAsync(admin, role, targetUserId);
+            if (await _teamAuthorizationService.CanAdminAccessTeamAsync(admin, role, teamId)
+                && await _teamAuthorizationService.CanAdminAccessUserAsync(admin, role, targetUserId))
+                return true;
+
+            return await _teamAuthorizationService.CanAdminInviteToTeamAsync(admin, role, teamId)
+                && (await _service.GetCoachesForTeamAsync(teamId)).Any(c => c.UserId == targetUserId);
         }
 
         [Function("AssignCoachToTeam")]
@@ -188,7 +194,7 @@ namespace TipInAPI.Functions
 
             // Coaches and team managers can only view coaches of their own teams
             if (role == "OrgAdmin" &&
-                !await _teamAuthorizationService.CanAdminAccessTeamAsync(Guid.Parse(userId), role, teamId))
+                !await _teamAuthorizationService.CanAdminInviteToTeamAsync(Guid.Parse(userId), role, teamId))
                 return await AuthorizationHelper.ForbiddenResponse(req, "Team is not in your organization");
             if (_authorizationService.HasAnyRole(role, "Coach", "TeamManager"))
             {

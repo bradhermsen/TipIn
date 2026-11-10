@@ -61,7 +61,7 @@ namespace TipInAPI.Functions
 
             var actorId = Guid.Parse(userId);
             var allowed = admin
-                ? await _teamAuthorizationService.CanAdminAccessTeamAsync(actorId, role, teamId)
+                ? await _teamAuthorizationService.CanAdminInviteToTeamAsync(actorId, role, teamId)
                 : await _teamAuthorizationService.IsUserAssignedToTeamAsync(actorId, teamId, _coachTeamsService);
             if (!allowed)
                 return (null, await AuthorizationHelper.ForbiddenResponse(req, "You do not have access to this team"));
