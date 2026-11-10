@@ -1,11 +1,65 @@
 
-This directory is intended for PlatformIO Test Runner and project tests.
+Gateway reliability host tests
+==============================
 
-Unit Testing is a software testing method by which individual units of
-source code, sets of one or more MCU program modules together with associated
-control data, usage procedures, and operating procedures, are tested to
-determine whether they are fit for use. Unit testing finds problems early
-in the development cycle.
+Run the fixed-frame shots mapping regression test with:
 
-More information about PlatformIO Unit Testing:
-- https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+  node "C:\TipIn\TipIn Gateway\test\scoreboard_shots_test.js"
+
+It reads the production C++ field offsets and applies its digit-filtering
+semantics to the captured 110-versus-10 frame, adjacent-field variations,
+single/two-digit shots, and blank-shot fallback. It is a host mapping test,
+not execution of the ESP32 C++ parser; also build the firmware and verify the
+physical feed after deployment.
+
+gateway_reliability_test.cpp is a standalone C++11 assertion-based test executable.
+It requires no ESP32, network connection or additional test framework.
+
+From a Visual Studio Developer Command Prompt, compile and run (use a scratch
+directory for the executable and object file):
+
+  cl /nologo /EHsc /I "C:\TipIn\TipIn Gateway\include" "C:\TipIn\TipIn Gateway\test\gateway_reliability_test.cpp" /Fe:gateway_reliability_test.exe
+  gateway_reliability_test.exe
+
+The tests cover the 20-IP history, eight active WebSocket limit, combined HTTP/WS
+deduplication, repeated admin reconnects, independent same-IP session health,
+recent/inactive boundary, live-IP-safe eviction, matching
+pong-only liveness, authentication/pong/congestion deadlines, Wi-Fi escalation
+boundaries, suppression during configuration tests, restored connections, and
+32-bit millis rollover. They do not prove physical Wi-Fi or async socket recovery.
+
+gateway_clients_json_test.cpp additionally tests the actual API serializer with
+ArduinoJson (restored by the normal firmware build). From the same scratch folder:
+
+  cl /nologo /EHsc /I "C:\TipIn\TipIn Gateway\include" /I "C:\TipIn\TipIn Gateway\.pio\libdeps\esp32dev\ArduinoJson\src" "C:\TipIn\TipIn Gateway\test\gateway_clients_json_test.cpp" /Fe:gateway_clients_json_test.exe
+  gateway_clients_json_test.exe
+
+It verifies exact top-level/record keys, nullable ages, connection states,
+credential exclusion, escaped viewer names, and wrap-safe age output.
+They also verify mixed-transport IP rows, deduplicated client names, active session
+counts, oldest-open-session duration, and latest activity basis.
+
+Run the IP grouping UI mock test with:
+
+  node "C:\TipIn\TipIn Gateway\test\gateway_clients_ui_test.js"
+
+After a firmware build, firmware_info_test.cpp verifies the actual generated
+metadata and additive JSON fields. Compile like gateway_clients_json_test.cpp,
+also passing /I "C:\TipIn\TipIn Gateway\.pio\build\esp32dev\generated".
+Run the matching admin UI mock test with:
+
+  node "C:\TipIn\TipIn Gateway\test\firmware_info_ui_test.js"
+
+Build firmware and the admin filesystem without uploading:
+
+  platformio run
+  platformio run --target buildfs
+
+After an explicitly approved hardware deployment, verify authenticated and
+unauthenticated requests to /api/clients, a normal viewer's matching pongs,
+viewer reconnects, and an isolated test access point outage. Verify reconnect
+attempts at 10 seconds, radio reinitialization at 60 seconds, and a setup AP
+after 120 seconds (30 seconds on boot), with scoreboard operation continuing.
+Run a multi-hour soak with the tablet and admin page, recording heap minima,
+disconnect reasons, reconnect/reinitialize counts, and skipped frames. A build
+and host tests alone cannot establish that the previously observed outage is fixed.

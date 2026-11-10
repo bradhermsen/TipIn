@@ -39,6 +39,18 @@ cd .\mobile\game-manager-mobile
 npx tsc --noEmit
 ```
 
+### Coach-signed lineup verification
+
+The Verify Rosters screen loads saved game lineups using the entered Game Manager
+code directly, including immediately after login before React session state updates.
+Initial load and pull-to-refresh both apply saved participants, starters, signatures,
+and locked status. Roster active defaults are used only when no saved lineup exists.
+Signed lineups cannot be edited on the tablet; an administrator must unlock them.
+Read failures are displayed and block verification/editing until a successful refresh,
+never treated as unsigned lineups.
+
+Run the mobile regression tests with `node --test tests/*.test.cjs`.
+
 ## 2) External Verification (APK)
 
 Use this for coaches/testers who should run without Metro, USB, or a connected laptop.

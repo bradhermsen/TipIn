@@ -1,5 +1,5 @@
-links2004/WebSockets
-esphome/ESPAsyncWebServer-esphome
-bblanchon/ArduinoJson
-esphome/AsyncTCP-esphome
+ESP32Async/ESPAsyncWebServer@3.12.1
 adafruit/Adafruit NeoPixel
+links2004/WebSockets
+ESP32Async/AsyncTCP@3.5.0
+bblanchon/ArduinoJson

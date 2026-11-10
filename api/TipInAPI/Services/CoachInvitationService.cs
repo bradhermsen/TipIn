@@ -28,9 +28,26 @@ namespace TipInAPI.Services
         public Guid InvitationId { get; set; }
         public Guid TeamId { get; set; }
         public string TeamName { get; set; } = "";
+        public string? LevelName { get; set; }
+        public string? TeamType { get; set; }
+        public string TeamDisplayName => Infrastructure.TeamNameFormatter.Format(TeamName, LevelName, TeamType);
         public string Email { get; set; } = "";
         public DateTime ExpiresAtUtc { get; set; }
         public string Token { get; set; } = "";
+        public CoachInvitationGame? Game { get; set; }
+        public bool ReusedPendingInvitation { get; set; }
+    }
+
+    public sealed class CoachInvitationGame
+    {
+        public Guid GameId { get; set; }
+        public string AwayTeamName { get; set; } = "";
+        public string HomeTeamName { get; set; } = "";
+        public DateTime GameDateTime { get; set; }
+        public string? ArenaName { get; set; }
+        public string? RinkName { get; set; }
+        public string? TeamType { get; set; }
+        public string? LevelName { get; set; }
     }
 
     public enum AcceptInviteStatus
@@ -57,6 +74,7 @@ namespace TipInAPI.Services
     public interface ICoachInvitationService
     {
         Task<CreatedCoachInvitation> CreateAsync(Guid createdByUserId, Guid teamId, string email);
+        Task<CreatedCoachInvitation> CreateForReminderAsync(Guid teamId, string email, CoachInvitationGame game, bool allowCreation = true);
         Task<IEnumerable<CoachInvitationItem>> ListForTeamAsync(Guid teamId);
         Task<Guid?> GetTeamIdAsync(Guid invitationId);
         Task<bool> RevokeAsync(Guid invitationId, Guid revokedByUserId);
@@ -91,7 +109,14 @@ namespace TipInAPI.Services
         private static string NormalizeEmail(string email) => (email ?? "").Trim().ToLowerInvariant();
 
         // Creating a new invite for the same team and email replaces (revokes) the pending one.
-        public async Task<CreatedCoachInvitation> CreateAsync(Guid createdByUserId, Guid teamId, string email)
+        public Task<CreatedCoachInvitation> CreateAsync(Guid createdByUserId, Guid teamId, string email) =>
+            CreateCoreAsync(createdByUserId, teamId, email, null, false);
+
+        public Task<CreatedCoachInvitation> CreateForReminderAsync(Guid teamId, string email, CoachInvitationGame game, bool allowCreation = true) =>
+            CreateCoreAsync(null, teamId, email, game, true, allowCreation);
+
+        private async Task<CreatedCoachInvitation> CreateCoreAsync(Guid? createdByUserId, Guid teamId, string email,
+            CoachInvitationGame? reminderGame, bool reusePending, bool allowCreation = true)
         {
             email = NormalizeEmail(email);
             var token = NewToken();
@@ -102,10 +127,58 @@ namespace TipInAPI.Services
             using var tx = conn.BeginTransaction();
             try
             {
-                var teamName = await conn.ExecuteScalarAsync<string?>(
-                    "SELECT Name FROM dbo.Teams WHERE Id = @TeamId", new { TeamId = teamId }, tx);
-                if (teamName == null)
+                var lockResult = await conn.ExecuteScalarAsync<int>(@"
+                    DECLARE @result int;
+                    EXEC @result = sys.sp_getapplock @Resource=@resource, @LockMode='Exclusive',
+                        @LockOwner='Transaction', @LockTimeout=10000;
+                    SELECT @result;", new { resource = $"coach-invite:{teamId}:{HashToken(email)}" }, tx);
+                if (lockResult < 0) throw new InvalidOperationException("Invitation is being updated. Please try again.");
+                var team = await conn.QuerySingleOrDefaultAsync<DTOs.CoachTeamDetailDto>(@"
+                    SELECT t.Name AS TeamName, l.Name AS LevelName, t.TeamType
+                    FROM dbo.Teams t
+                    LEFT JOIN dbo.Levels l ON l.Id = t.LevelId
+                    WHERE t.Id = @TeamId", new { TeamId = teamId }, tx);
+                if (team == null)
                     throw new InvalidOperationException("Team not found.");
+
+                if (reusePending)
+                {
+                    var pending = await conn.QueryFirstOrDefaultAsync<CreatedCoachInvitation>(@"
+                        SELECT TOP 1 InvitationId, TeamId, Email, ExpiresAtUtc
+                        FROM dbo.CoachInvitations
+                        WHERE TeamId=@teamId AND Email=@email AND Status='Pending'
+                            AND ExpiresAtUtc > SYSUTCDATETIME() AND FailedAttempts < @MaxFailedAttempts
+                        ORDER BY CreatedAtUtc DESC;", new { teamId, email, MaxFailedAttempts }, tx);
+                    if (pending != null)
+                    {
+                        pending.TeamName = team.TeamName!;
+                        pending.LevelName = team.LevelName;
+                        pending.TeamType = team.TeamType;
+                        pending.Game = reminderGame;
+                        pending.ReusedPendingInvitation = true;
+                        tx.Commit();
+                        return pending;
+                    }
+                }
+
+                if (!allowCreation) throw new InvalidOperationException("Automatic invitation creation is disabled; the pending invitation is no longer valid.");
+                var today = CoachReminderSchedule.LocalNow(DateTime.UtcNow).Date;
+                var game = reminderGame ?? await conn.QueryFirstOrDefaultAsync<CoachInvitationGame>(@"
+                    SELECT TOP 1 g.GameId, away.Name AS AwayTeamName, home.Name AS HomeTeamName,
+                        g.GameDateTime, g.ArenaName, g.RinkName,
+                        COALESCE(home.TeamType, away.TeamType) AS TeamType,
+                        COALESCE(hl.Name, al.Name) AS LevelName
+                    FROM dbo.Games g
+                    JOIN dbo.Teams home ON home.Id = g.HomeTeamId
+                    JOIN dbo.Teams away ON away.Id = g.AwayTeamId
+                    LEFT JOIN dbo.Levels hl ON hl.Id = home.LevelId
+                    LEFT JOIN dbo.Levels al ON al.Id = away.LevelId
+                    WHERE @TeamId IN (g.HomeTeamId, g.AwayTeamId)
+                      AND g.GameDateTime >= @Today
+                      AND LOWER(LTRIM(RTRIM(ISNULL(g.Status, '')))) NOT IN
+                          ('final', 'completed', 'closed', 'cancelled', 'canceled', 'postponed', 'in progress', 'inprogress', 'live')
+                    ORDER BY g.GameDateTime, g.GameId;",
+                    new { TeamId = teamId, Today = today }, tx);
 
                 await conn.ExecuteAsync(@"
                     UPDATE dbo.CoachInvitations
@@ -134,10 +207,13 @@ namespace TipInAPI.Services
                 {
                     InvitationId = invitationId,
                     TeamId = teamId,
-                    TeamName = teamName,
+                    TeamName = team.TeamName!,
+                    LevelName = team.LevelName,
+                    TeamType = team.TeamType,
                     Email = email,
                     ExpiresAtUtc = expires,
-                    Token = token
+                    Token = token,
+                    Game = game
                 };
             }
             catch

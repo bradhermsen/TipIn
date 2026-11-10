@@ -56,8 +56,13 @@ namespace TipInAPI.Tests
         public async Task ListGamesForTeam_ReturnsUpcomingGames_WithOpponentAndLockState()
         {
             using (var conn = _db.Factory.CreateConnection())
+            {
                 conn.Execute("UPDATE Games SET Status = 'Cancelled' WHERE HomeTeamId = @t AND AwayTeamId = @v",
                     new { t = _db.HostTeamId, v = _db.VisitorTeamId });
+                conn.Execute(@"UPDATE Teams SET Name = 'Riverbend', TeamType = 'Boys',
+                    LevelId = (SELECT Id FROM Levels WHERE Name = 'JV') WHERE Id = @id",
+                    new { id = _db.OtherTeamId });
+            }
 
             var games = (await _lineups.ListGamesForTeamAsync(_db.HostTeamId)).ToList();
 
@@ -65,7 +70,11 @@ namespace TipInAPI.Tests
             Assert.Equal(_gameId, mine.GameId);
             Assert.True(mine.IsHome);
             Assert.False(mine.Locked);
+            Assert.True(mine.NeedsLineup);
             Assert.False(string.IsNullOrEmpty(mine.OpponentName));
+            Assert.Equal("JV", mine.OpponentLevelName);
+            Assert.Equal("Boys", mine.OpponentTeamType);
+            Assert.Equal("Riverbend JV - Boys", mine.OpponentDisplayName);
         }
 
         [Fact]
@@ -85,8 +94,28 @@ namespace TipInAPI.Tests
             SetLevel("Varsity");
             BuildRoster(8);
 
-            Assert.Equal(CoachRosterOutcome.Invalid, (await Save(0, _players, _players.Skip(1).Take(6))).Outcome);
-            Assert.Equal(CoachRosterOutcome.Invalid, (await Save(0, _players.Take(5), _players.Take(6))).Outcome);
+            var noGoalie = await Save(0, _players, _players.Skip(1).Take(6));
+            Assert.Equal(CoachRosterOutcome.Invalid, noGoalie.Outcome);
+            Assert.Equal("Goalie selection required. Select a goalie as a starter.", noGoalie.Message);
+            var inactiveStarter = await Save(0, _players.Take(5), _players.Take(6));
+            Assert.Equal(CoachRosterOutcome.Invalid, inactiveStarter.Outcome);
+            Assert.Equal("Every starter must be a participant.", inactiveStarter.Message);
+            var tooFew = await Save(0, _players, _players.Take(5));
+            Assert.Equal("Varsity lineups need exactly 6 starters.", tooFew.Message);
+        }
+
+        [Fact]
+        public async Task GoalieFlag_IsExposedToCoachSite_AndAcceptedForStartingGoalie()
+        {
+            SetLevel("Varsity");
+            BuildRoster(6);
+            using (var conn = _db.Factory.CreateConnection())
+                conn.Execute("UPDATE RosterEntries SET Position = NULL, IsGoalie = 1 WHERE TeamId = @t AND PlayerId = @p",
+                    new { t = _db.HostTeamId, p = _players[0] });
+
+            var roster = await new CoachRosterService(_db.Factory).GetRosterAsync(_db.HostTeamId);
+            Assert.True(roster.Single(p => p.PlayerId == _players[0]).IsGoalie);
+            Assert.Equal(CoachRosterOutcome.Ok, (await Save(0, _players, _players)).Outcome);
         }
 
         [Fact]
@@ -127,6 +156,7 @@ namespace TipInAPI.Tests
             Assert.Equal(CoachRosterOutcome.Warning, edit.Outcome);
             Assert.Equal(CoachRosterOutcome.Warning, (await Sign(1)).Outcome);
             Assert.True(((LineupState)(await _lineups.GetAsync(_gameId, _db.HostTeamId)).Data!).Locked);
+            Assert.False((await _lineups.ListGamesForTeamAsync(_db.HostTeamId)).Single(g => g.GameId == _gameId).NeedsLineup);
         }
 
         [Fact]

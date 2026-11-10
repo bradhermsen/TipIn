@@ -3,7 +3,7 @@ name: Deploy Game View
 on:
   push:
     branches:
-      - main
+      - dev
     paths:
       - web/game-view/**
       - .github/workflows/deploy-game-view-dev-swa.yml

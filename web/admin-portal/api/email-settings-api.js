@@ -1,4 +1,17 @@
 window.EmailSettingsApi = {
+  async getAutomation() {
+    const res = await authFetch("/email/automation");
+    if (!res || !res.ok) throw new Error(await readErrorMessage(res, "Failed to load email automation settings."));
+    return res.json();
+  },
+
+  async saveAutomation(settings) {
+    const res = await authFetch("/email/automation", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings),
+    });
+    if (!res || !res.ok) throw new Error(await readErrorMessage(res, "Failed to save email automation settings."));
+    return res.json();
+  },
   async getSettings() {
     const res = await authFetch("/email/settings");
     if (!res || !res.ok) {

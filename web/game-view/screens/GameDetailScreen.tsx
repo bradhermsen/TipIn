@@ -224,20 +224,18 @@ export function GameDetailScreen() {
       }
 
       try {
-        const staticDataPromise = staticDataRef.current
-          ? Promise.resolve(staticDataRef.current)
-          : Promise.all([
-              getTeams(),
-              getPublicGameRosters(gameId),
-              getPublicGameCoaches(gameId).catch(() => ({
-                homeCoaches: [],
-                awayCoaches: [],
-              })),
-            ]).then(([teams, rosterBundle, coachesBundle]) => ({
-              teams,
-              rosterBundle,
-              coachesBundle,
-            }));
+        const staticDataPromise = Promise.all([
+          staticDataRef.current ? Promise.resolve(staticDataRef.current.teams) : getTeams(),
+          getPublicGameRosters(gameId),
+          getPublicGameCoaches(gameId).catch(() => ({
+            homeCoaches: [],
+            awayCoaches: [],
+          })),
+        ]).then(([teams, rosterBundle, coachesBundle]) => ({
+          teams,
+          rosterBundle,
+          coachesBundle,
+        }));
 
         const [game, summary, staticData] = await Promise.all([
           getGameById(gameId),

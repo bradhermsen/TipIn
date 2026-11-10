@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using TipInAPI.Infrastructure.Authorization;
 using TipInAPI.Services;
+using TipInAPI.DTOs;
 
 namespace TipInAPI.Functions
 {
@@ -84,15 +85,15 @@ namespace TipInAPI.Functions
                     break;
                 case CoachRosterOutcome.NotFound:
                     response.StatusCode = HttpStatusCode.NotFound;
-                    await response.WriteAsJsonAsync(new { error = result.Message });
+                    await response.WriteAsJsonAsync(new { error = result.Message }, HttpStatusCode.NotFound);
                     break;
                 case CoachRosterOutcome.Warning:
                     response.StatusCode = HttpStatusCode.Conflict;
-                    await response.WriteAsJsonAsync(new { error = result.Message, details = result.Data });
+                    await response.WriteAsJsonAsync(new { error = result.Message, details = result.Data }, HttpStatusCode.Conflict);
                     break;
                 default:
                     response.StatusCode = HttpStatusCode.BadRequest;
-                    await response.WriteAsJsonAsync(new { error = result.Message });
+                    await response.WriteAsJsonAsync(new { error = result.Message }, HttpStatusCode.BadRequest);
                     break;
             }
             return response;
@@ -111,6 +112,30 @@ namespace TipInAPI.Functions
             return response;
         }
 
+        [Function("CoachGetStaff")]
+        public async Task<HttpResponseData> GetStaff(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/teams/{teamId:guid}/staff")] HttpRequestData req,
+            Guid teamId)
+        {
+            var (_, error) = await AuthorizeAsync(req, teamId);
+            if (error != null) return error;
+            return await ToResponseAsync(req, await _service.GetStaffAsync(teamId));
+        }
+
+        [Function("CoachUpdateAssistant")]
+        public async Task<HttpResponseData> UpdateAssistant(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "coach/teams/{teamId:guid}/staff/assistants/{slot:int}")] HttpRequestData req,
+            Guid teamId, int slot)
+        {
+            var (_, error) = await AuthorizeAsync(req, teamId);
+            if (error != null) return error;
+            UpdateAssistantRequest? body;
+            try { body = await req.ReadFromJsonAsync<UpdateAssistantRequest>(); }
+            catch (System.Text.Json.JsonException) { return await AuthorizationHelper.BadRequestResponse(req, "Invalid JSON payload"); }
+            if (body == null) return await AuthorizationHelper.BadRequestResponse(req, "Request body is required");
+            return await ToResponseAsync(req, await _service.UpdateAssistantAsync(teamId, slot, body));
+        }
+
         [Function("CoachSearchPlayers")]
         public async Task<HttpResponseData> Search(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/teams/{teamId:guid}/player-search")] HttpRequestData req,
@@ -123,7 +148,7 @@ namespace TipInAPI.Functions
             {
                 var limited = req.CreateResponse(HttpStatusCode.TooManyRequests);
                 limited.Headers.Add("Retry-After", "60");
-                await limited.WriteAsJsonAsync(new { error = "Too many searches. Please wait a minute and try again." });
+                await limited.WriteAsJsonAsync(new { error = "Too many searches. Please wait a minute and try again." }, HttpStatusCode.TooManyRequests);
                 return limited;
             }
 

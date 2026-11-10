@@ -37,9 +37,23 @@ a { color: var(--orange-2); }
 .in { color: var(--orange); }
 
 main { max-width: 640px; margin: 0 auto; padding: 16px; }
+.game-view-legal-footer {
+  border-top: 1px solid rgba(212, 219, 227, 0.24);
+  color: #aebdd2; font-size: 0.72rem; line-height: 1.55;
+  margin: 28px auto 0; padding: 18px 12px 8px; text-align: center;
+  max-width: 640px;
+}
+.game-view-legal-footer p { margin: 0; }
+.game-view-footer-links { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; margin-bottom: 10px; }
+.game-view-footer-links a { color: #9fc9ff; }
+.gameview-share h2 { margin-top: 0; }
+.gameview-share img { display: block; max-width: 100%; height: auto; }
 
 h1 { font-size: 24px; margin: 8px 0 16px; }
 h2 { font-size: 18px; margin: 20px 0 8px; }
+.teams-heading { margin-bottom: 16px; }
+.teams-heading h1 { margin-bottom: 2px; }
+.teams-heading p { margin: 0; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 
@@ -73,10 +87,26 @@ button.danger { background: transparent; color: var(--danger); border: 1px solid
 button.block { width: 100%; margin-top: 16px; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .link-btn { background: none; border: 0; color: var(--orange-2); padding: 8px; min-height: 0; font-weight: 600; }
+.gm-access-link { display: block; padding: 0 0 12px; text-align: left; text-decoration: underline; min-height: 44px; }
+.gm-access-dialog {
+  width: min(360px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
+  padding: 20px; color: var(--text); background: var(--navy-2);
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.gm-access-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+.gm-access-dialog h2 { margin-top: 0; }
+.gm-access-dialog .row { flex-wrap: wrap; }
+.gm-access-dialog #gm-copy-status:empty { display: none; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.spread { justify-content: space-between; }
 .row > * { min-width: 0; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.player-details { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); gap: 8px; }
+.player-details > div { min-width: 0; }
+.player-details input, .player-details select { min-width: 0; padding: 12px 8px; }
+.roster-preview { display: block; max-width: 100%; max-height: 240px; margin: 12px auto; object-fit: contain; }
+.import-player { margin-top: 12px; }
+.import-player p { overflow-wrap: anywhere; }
 
 .msg { padding: 10px 12px; border-radius: 8px; margin: 12px 0; font-size: 14px; }
 .msg.error { background: rgba(255, 107, 102, 0.12); border: 1px solid var(--danger); color: #ffd2d0; }
@@ -105,14 +135,24 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   padding: 16px 0 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
 }
 
-.lineup-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.lineup-row .who { flex: 1; }
+.lineup-head, .lineup-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 84px 84px; align-items: center; gap: 10px; }
+.lineup-head > :first-child { grid-column: span 2; }
+.lineup-head > :not(:first-child) { text-align: center; }
+.lineup-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.lineup-row .who { min-width: 0; overflow-wrap: anywhere; }
 .toggle {
   min-width: 84px; padding: 8px 10px; font-size: 14px; border-radius: 999px;
   background: var(--navy); color: var(--muted); border: 1px solid var(--line); font-weight: 600;
 }
 .toggle[aria-pressed="true"] { background: var(--orange); color: #1a0f00; border-color: var(--orange); }
+.toggle.starter[aria-pressed="true"] { background: var(--ok); color: #08251a; border-color: var(--ok); }
 .toggle:disabled { opacity: 0.45; }
+
+@media (max-width: 400px) {
+  .lineup-head, .lineup-row { grid-template-columns: 36px minmax(0, 1fr) 70px 70px; gap: 6px; }
+  .lineup-row .jersey { min-width: 36px; width: 36px; height: 36px; }
+  .lineup-row .toggle { min-width: 0; padding: 8px 4px; font-size: 13px; }
+}
 
 .modal-back {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); display: flex; align-items: flex-end;

@@ -69,9 +69,12 @@ namespace TipInAPI.Repositories
                 SELECT 
                     t.Id AS TeamId, 
                     t.Name AS TeamName,
+                    l.Name AS LevelName,
+                    t.TeamType,
                     t.Abbreviation
                 FROM CoachTeams ct
                 JOIN Teams t ON t.Id = ct.TeamId
+                LEFT JOIN Levels l ON l.Id = t.LevelId
                 WHERE ct.UserId = @UserId;";
 
             return await conn.QueryAsync<CoachTeamDetailDto>(sql, new { UserId = userId }, tx);

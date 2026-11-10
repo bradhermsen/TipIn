@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
 using Microsoft.Extensions.Configuration;
@@ -39,6 +40,39 @@ namespace TipInAPI.Tests
             Assert.Equal(AcceptInviteStatus.Accepted, result.Status);
             var id = _db.Scalar<Guid>("SELECT Id FROM AuthUsers WHERE Email = @email", new { email });
             return (id, email);
+        }
+
+        [Fact]
+        public async Task TeamLabels_IncludeLevelAndType_ForInvitesAndCoachTeams()
+        {
+            using (var conn = _db.Factory.CreateConnection())
+            {
+                Assert.Equal(1, conn.Execute(@"
+                    UPDATE Teams SET Name = 'Riverbend', TeamType = 'Boys',
+                        LevelId = (SELECT Id FROM Levels WHERE Name = 'JV')
+                    WHERE Id = @id", new { id = _db.HostTeamId }));
+                Assert.Equal(1, conn.Execute(@"
+                    UPDATE Teams SET Name = 'Riverbend', TeamType = 'Girls',
+                        LevelId = (SELECT Id FROM Levels WHERE Name = 'Varsity')
+                    WHERE Id = @id", new { id = _db.HostTeam2Id }));
+            }
+
+            var email = _db.NewEmail("labels");
+            var first = await _invites.CreateAsync(_db.HostAdminId, _db.HostTeamId, email);
+            var second = await _invites.CreateAsync(_db.HostAdminId, _db.HostTeam2Id, email);
+            Assert.Equal("Riverbend", first.TeamName);
+            Assert.Equal("Riverbend JV - Boys", first.TeamDisplayName);
+            Assert.Equal("Riverbend Varsity - Girls", second.TeamDisplayName);
+            Assert.Equal(AcceptInviteStatus.Accepted,
+                (await _invites.AcceptAsync(first.Token, email, Password, "Cora", "Coach")).Status);
+            Assert.Equal(AcceptInviteStatus.Accepted,
+                (await _invites.AcceptAsync(second.Token, email, Password, null, null)).Status);
+
+            var userId = _db.Scalar<Guid>("SELECT Id FROM AuthUsers WHERE Email = @email", new { email });
+            var teams = (await new CoachTeamsRepository(_db.Factory).GetTeamsForCoachAsync(userId)).ToList();
+            Assert.Equal(2, teams.Count);
+            Assert.Equal("Riverbend JV - Boys", teams.Single(t => t.TeamId == _db.HostTeamId).TeamDisplayName);
+            Assert.Equal("Riverbend Varsity - Girls", teams.Single(t => t.TeamId == _db.HostTeam2Id).TeamDisplayName);
         }
 
         [Fact]

@@ -21,6 +21,8 @@ namespace TipInAPI.Services
         public List<string> To { get; set; } = new List<string>();
         public string Subject { get; set; } = string.Empty;
         public string BodyText { get; set; } = string.Empty;
+        public string? BodyHtml { get; set; }
+        public List<EmailAttachment> InlineImages { get; set; } = new List<EmailAttachment>();
         public List<EmailAttachment> Attachments { get; set; } = new List<EmailAttachment>();
     }
 
@@ -34,6 +36,7 @@ namespace TipInAPI.Services
     {
         public string FileName { get; set; } = "attachment.bin";
         public string ContentType { get; set; } = "application/octet-stream";
+        public string? ContentId { get; set; }
         public byte[] Content { get; set; } = System.Array.Empty<byte>();
     }
 

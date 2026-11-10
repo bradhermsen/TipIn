@@ -29,11 +29,18 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Build local OCR assets and run coach-site tests
+        working-directory: web/coach-site
+        run: |
+          npm ci
+          npm test
+          npm run build
+
       - name: Check Coach Site JavaScript
         shell: bash
         run: |
           set -euo pipefail
-          find web/coach-site -type f -name '*.js' -print0 |
+          find web/coach-site/js -type f -name '*.js' -print0 |
             while IFS= read -r -d '' script; do
               node --check "$script"
             done
@@ -75,7 +82,7 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ env.SWA_API_TOKEN }}
           action: upload
-          app_location: web/coach-site
+          app_location: web/coach-site/dist
           api_location: ""
           output_location: ""
           skip_app_build: true

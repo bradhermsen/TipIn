@@ -1,7 +1,9 @@
 import { loadConfig, getSession, login, logout, publicApi, api } from "./api.js";
-import { $, esc } from "./ui.js";
+import { $, esc, formatGameTime, needsLineup } from "./ui.js";
 import { renderRoster } from "./roster.js";
 import { renderGames, renderLineup } from "./lineup.js";
+import { renderCoaches } from "./coaches.js";
+import { loginPath, loginDestination } from "./navigation.js";
 
 const app = $("#app");
 const topbar = $("#topbar");
@@ -29,7 +31,10 @@ document.addEventListener("click", (e) => {
   }
 });
 window.addEventListener("popstate", route);
-window.addEventListener("session-expired", () => navigate("/login", true));
+window.addEventListener("session-expired", () => {
+  const destination = location.pathname === "/login" ? loginDestination(location.search) : location.pathname;
+  navigate(loginPath(destination), true);
+});
 $("#signout").addEventListener("click", async () => {
   await logout();
   navigate("/login", true);
@@ -70,7 +75,7 @@ function renderLogin(notice) {
     busy(btn, true, "Signing in…");
     try {
       await login($("#email").value.trim(), $("#pw").value, $("#keep").checked);
-      navigate("/", true);
+      navigate(loginDestination(location.search), true);
     } catch (err) {
       $("#err").innerHTML = msg("error", err.status === 401 ? "Incorrect email or password." : err.message);
       busy(btn, false, "Sign in");
@@ -199,10 +204,27 @@ async function renderHome(session) {
     app.innerHTML = msg("error", err.message);
     return;
   }
-  if (teams.length === 1) return navigate(`/teams/${teams[0].teamId}`, true);
-  app.innerHTML = `<h1>Your teams</h1>` + (teams.length
-    ? teams.map((t) => `<a class="card" href="/teams/${esc(t.teamId)}" data-link><b>${esc(t.teamName)}</b></a>`).join("")
-    : `<div class="card muted">No teams are assigned to your account yet. Ask your administrator for an invitation.</div>`);
+  const gameResults = await Promise.allSettled(teams.map((t) => api(`/coach/teams/${t.teamId}/games`)));
+  if (location.pathname !== "/") return;
+  app.innerHTML = `<header class="teams-heading"><h1>Your Teams</h1><p class="muted">Hockey</p></header>` + (teams.length
+    ? teams.map((t, i) => {
+      const result = gameResults[i];
+      const pending = result.status === "fulfilled" ? result.value.filter((g) => needsLineup(g)) : [];
+      return `<a class="card" href="/teams/${esc(t.teamId)}/games" data-link>
+        <div class="row spread"><b>${esc(t.teamDisplayName)}</b>
+          ${pending.length ? `<span class="pill live">${pending.length} ${pending.length === 1 ? "game needs" : "games need"} lineup</span>` : ""}</div>
+        ${pending.length ? `<div class="muted small">${pending[0].isHome ? "vs" : "at"} ${esc(pending[0].opponentDisplayName)} · ${esc(formatGameTime(pending[0].gameDateTime))}</div>` : ""}
+        ${result.status === "rejected" ? `<div class="msg error">Could not check lineups: ${esc(result.reason.message)}</div>` : ""}</a>`;
+    }).join("")
+    : `<div class="card muted">No teams are assigned to your account yet. Ask your administrator for an invitation.</div>`)
+    + `<section class="card gameview-share" aria-labelledby="gameview-share-title">
+      <h2 id="gameview-share-title">Share GameView with your fans</h2>
+      <p>Family, friends, and fans can follow game scoring and view rosters on TipIn GameView.</p>
+      <p>Visit <a href="https://gameview.tipinscoring.com/">gameview.tipinscoring.com</a> or scan the QR code below.</p>
+      <a href="https://gameview.tipinscoring.com/" aria-label="Open TipIn GameView">
+        <img src="/assets/gameview-qr.png" width="180" height="180" alt="QR code linking to https://gameview.tipinscoring.com/" />
+      </a>
+    </section>`;
 }
 
 export async function route() {
@@ -213,11 +235,11 @@ export async function route() {
   const isPublic = publicRoutes.includes(path);
 
   topbar.hidden = isPublic || !session;
-  if (!isPublic && !session) return navigate("/login", true);
+  if (!isPublic && !session) return navigate(loginPath(path), true);
   window.scrollTo(0, 0);
 
   if (path === "/login") {
-    if (session) return navigate("/", true);
+    if (session) return navigate(loginDestination(location.search), true);
     const notice = new URLSearchParams(location.search).get("reset") ? msg("ok", "Password updated. Sign in with your new password.") : "";
     return renderLogin(notice);
   }
@@ -227,7 +249,9 @@ export async function route() {
 
   if (path === "/") return renderHome(session);
   let m;
-  if ((m = /^\/teams\/([0-9a-f-]{36})$/i.exec(path))) return renderRoster(app, m[1], navigate);
+  if ((m = /^\/teams\/([0-9a-f-]{36})$/i.exec(path))) return renderGames(app, m[1], navigate);
+  if ((m = /^\/teams\/([0-9a-f-]{36})\/roster$/i.exec(path))) return renderRoster(app, m[1], navigate);
+  if ((m = /^\/teams\/([0-9a-f-]{36})\/coaches$/i.exec(path))) return renderCoaches(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games$/i.exec(path))) return renderGames(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games\/([0-9a-f-]{36})$/i.exec(path))) return renderLineup(app, m[1], m[2], navigate);
   app.innerHTML = msg("error", "Page not found.") + `<p><a href="/" data-link>Go home</a></p>`;
