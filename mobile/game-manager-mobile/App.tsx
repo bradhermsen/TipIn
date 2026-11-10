@@ -1642,6 +1642,9 @@ export default function App() {
   const [headCoachSignatures, setHeadCoachSignatures] = useState<
     Record<string, string>
   >({});
+  const [lineupByTeam, setLineupByTeam] = useState<
+    Record<string, { version: number; locked: boolean }>
+  >({});
   const [signatureContext, setSignatureContext] =
     useState<SignatureContext | null>(null);
   const [signatureNameInput, setSignatureNameInput] = useState("");
@@ -6140,6 +6143,78 @@ export default function App() {
     };
   }
 
+  async function fetchSavedLineup(gameId: string, teamId: string) {
+    try {
+      const response = await fetch(
+        `${activeApiBase}/games/${gameId}/teams/${teamId}/lineup-mobile`,
+        { headers: { "x-TipIn-access-code": session?.code ?? "" } },
+      );
+      if (!response.ok) return null;
+      return (await response.json()) as {
+        version: number;
+        starterIds: string[];
+        locked: boolean;
+        signedBy?: string | null;
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Saves the current starters and signs the lineup in one step; throws a user-facing message on failure
+  async function saveAndSignLineup(teamId: string, signerName: string) {
+    const gameId = nextGame?.gameId;
+    if (!gameId) throw new Error("Scheduled game ID is missing.");
+
+    const roster = rostersByTeam[teamId] ?? [];
+    const participantIds = roster
+      .filter((player) => player.isActive)
+      .map((player) => player.playerId);
+    const starterIds = startersByTeam[teamId] ?? [];
+    const headers = {
+      "Content-Type": "application/json",
+      "x-TipIn-access-code": session?.code ?? "",
+    };
+    const base = `${activeApiBase}/games/${gameId}/teams/${teamId}/lineup-mobile`;
+    let version = lineupByTeam[teamId]?.version ?? 0;
+
+    const readError = async (response: Response) => {
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        details?: { code?: string };
+      } | null;
+      if (body?.details?.code === "STALE_VERSION") {
+        return "The lineup was changed elsewhere. Reload the roster and try again.";
+      }
+      return body?.error ?? `Request failed (${response.status}).`;
+    };
+
+    const saveResponse = await fetch(base, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        expectedVersion: version,
+        participantIds,
+        starterIds,
+      }),
+    });
+    if (!saveResponse.ok) throw new Error(await readError(saveResponse));
+    version = ((await saveResponse.json()) as { version: number }).version;
+
+    const signResponse = await fetch(`${base}/sign`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        expectedVersion: version,
+        signerName,
+        device: "Game Manager tablet",
+      }),
+    });
+    if (!signResponse.ok) throw new Error(await readError(signResponse));
+
+    setLineupByTeam((prev) => ({ ...prev, [teamId]: { version, locked: true } }));
+  }
+
   async function markGameInProgress(gameId: string) {
     const response = await fetch(
       `${activeApiBase}/games/${gameId}/start-mobile`,
@@ -6191,12 +6266,34 @@ export default function App() {
 
       setMediaOutletRecipients(mediaRecipients);
 
-      setStartersByTeam({
+      const startersInit: Record<string, string[]> = {
         [homeId]: [],
         [awayId]: [],
-      });
+      };
+      const signaturesInit: Record<string, string> = {};
+      const lineupInit: Record<string, { version: number; locked: boolean }> = {};
+      if (game.gameId) {
+        const rosters: Record<string, RosterPlayer[]> = {
+          [homeId]: homeRoster,
+          [awayId]: awayRoster,
+        };
+        for (const teamId of [homeId, awayId]) {
+          const saved = await fetchSavedLineup(game.gameId, teamId);
+          if (!saved) continue;
+          const activeIds = new Set(
+            rosters[teamId].filter((p) => p.isActive).map((p) => p.playerId),
+          );
+          startersInit[teamId] = (saved.starterIds ?? []).filter((id) =>
+            activeIds.has(id),
+          );
+          lineupInit[teamId] = { version: saved.version, locked: saved.locked };
+          if (saved.locked && saved.signedBy) signaturesInit[teamId] = saved.signedBy;
+        }
+      }
+      setStartersByTeam(startersInit);
+      setLineupByTeam(lineupInit);
 
-      setHeadCoachSignatures({});
+      setHeadCoachSignatures(signaturesInit);
       setCurrentGoalieByTeam({
         [homeId]:
           homeRoster.find((player) => player.isGoalie && player.isActive)
@@ -6325,6 +6422,10 @@ export default function App() {
   }
 
   function toggleStarter(teamId: string, playerId: string) {
+    if (lineupByTeam[teamId]?.locked) {
+      setRosterError("This lineup is signed and locked. Ask an administrator to unlock it.");
+      return;
+    }
     setStartersByTeam((prev) => {
       const current = prev[teamId] ?? [];
       const roster = rostersByTeam[teamId] ?? [];
@@ -6356,6 +6457,10 @@ export default function App() {
   }
 
   function togglePlayerActive(teamId: string, playerId: string) {
+    if (lineupByTeam[teamId]?.locked) {
+      setRosterError("This lineup is signed and locked. Ask an administrator to unlock it.");
+      return;
+    }
     setRostersByTeam((prev) => {
       const roster = prev[teamId] ?? [];
       const updated = roster.map((player) =>
@@ -7373,7 +7478,7 @@ export default function App() {
     setStage("coachSignature");
   }
 
-  function confirmSignature() {
+  async function confirmSignature() {
     if (!signatureContext) return;
 
     const signedBy = signatureNameInput.trim();
@@ -7387,9 +7492,21 @@ export default function App() {
     }
 
     if (signatureContext.type === "coach") {
+      const teamId = signatureContext.teamId;
+      if (!lineupByTeam[teamId]?.locked) {
+        try {
+          await saveAndSignLineup(teamId, signedBy);
+        } catch (err) {
+          setRosterError(err instanceof Error ? err.message : String(err));
+          setSignatureContext(null);
+          setSignatureNameInput("");
+          setStage("rosterVerify");
+          return;
+        }
+      }
       setHeadCoachSignatures((prev) => ({
         ...prev,
-        [signatureContext.teamId]: signedBy,
+        [teamId]: signedBy,
       }));
       setRosterError("");
       setStage("rosterVerify");
