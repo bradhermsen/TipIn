@@ -11,6 +11,31 @@
 #include "esp_wpa2.h"
 #include "esp_heap_caps.h"
 #include "esp_system.h"
+#include "gateway_lock.h"
+#include "gateway_reliability.h"
+#include "gateway_clients_json.h"
+#include "firmware_info.h"
+#include <atomic>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+
+std::recursive_mutex gatewayStateMutex;
+tipin::ClientHistory clientHistory;
+tipin::WifiRecovery wifiRecovery;
+std::atomic<bool> broadcastRequested{false};
+unsigned long wifiReinitializeCount = 0;
+unsigned long wsSkippedFrames = 0;
+unsigned long wsTimeoutCount = 0;
+unsigned long lastHealthLogMs = 0;
+uint8_t lastWifiDisconnectReason = 0;
+unsigned long lastWifiDisconnectAtMs = 0;
+unsigned long wifiDisconnectCount = 0;
+std::atomic<unsigned long> wifiEventsDropped{0};
+struct WifiEventRecord {
+    WiFiEvent_t type;
+    uint8_t reason;
+};
+QueueHandle_t wifiEventQueue = nullptr;
 
 // Hardware & Server Instances
 constexpr uint16_t HTTP_SERVER_PORT = 80;
@@ -40,8 +65,6 @@ constexpr int FACTORY_RESET_BUTTON_PIN = 0;
 constexpr unsigned long FACTORY_RESET_HOLD_MS = 7000;
 unsigned long factoryResetPressStartedMs = 0;
 bool factoryResetInProgress = false;
-constexpr unsigned long WIFI_RECONNECT_INTERVAL_MS = 10000;
-unsigned long lastWifiReconnectAttemptMs = 0;
 unsigned long wifiReconnectCount = 0;
 bool stationModeConfigured = false;
 constexpr unsigned long WIFI_TEST_TIMEOUT_MS = 30000;
@@ -61,6 +84,10 @@ struct WifiSettings {
 };
 
 WifiSettings pendingWifi;
+WifiSettings activeWifi;
+bool wifiTestStartRequested = false;
+bool wifiTestHasIp = false;
+bool factoryResetRequested = false;
 bool wifiTestActive = false;
 unsigned long wifiTestStartedMs = 0;
 String wifiTestState = "idle";
@@ -121,13 +148,24 @@ const char* getResetReasonName() {
 }
 
 void addHealthJson(JsonDocument &doc) {
+    GatewayGuard guard(gatewayStateMutex);
+    tipin::addFirmwareJson(doc);
     doc["uptimeMs"] = millis();
     doc["freeHeap"] = ESP.getFreeHeap();
     doc["minimumFreeHeap"] = ESP.getMinFreeHeap();
     doc["largestFreeHeapBlock"] = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     doc["resetReason"] = getResetReasonName();
     doc["wifiReconnectCount"] = wifiReconnectCount;
-    doc["wsClientCount"] = ws.count();
+    doc["wsClientCount"] = clientHistory.openCount();
+    doc["wifiReinitializeCount"] = wifiReinitializeCount;
+    doc["wifiDisconnectCount"] = wifiDisconnectCount;
+    doc["lastWifiDisconnectReason"] = lastWifiDisconnectReason;
+    if (wifiDisconnectCount) doc["lastWifiDisconnectAgeMs"] = millis() - lastWifiDisconnectAtMs;
+    else doc["lastWifiDisconnectAgeMs"] = nullptr;
+    doc["wifiEventsDropped"] = wifiEventsDropped.load();
+    doc["setupApActive"] = wifiRecovery.fallbackAp;
+    doc["wsSkippedFrames"] = wsSkippedFrames;
+    doc["wsTimeoutCount"] = wsTimeoutCount;
 }
 
 bool parseIpStrict(const String &value, IPAddress &outIp) {
@@ -137,6 +175,7 @@ bool parseIpStrict(const String &value, IPAddress &outIp) {
 }
 
 void logMsg(const String &msg) {
+    GatewayGuard guard(gatewayStateMutex);
     Serial.println(msg);
     consoleLogs += msg + "\n";
     if (consoleLogs.length() > 4000) {
@@ -170,7 +209,7 @@ WifiSettings loadWifiSettings() {
 }
 
 bool applyStaticIp(const WifiSettings &settings) {
-    if (settings.dhcp) return true;
+    if (settings.dhcp) return WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
 
     IPAddress ip;
     IPAddress gateway;
@@ -183,22 +222,35 @@ bool applyStaticIp(const WifiSettings &settings) {
     return WiFi.config(ip, gateway, subnet);
 }
 
-void beginWifiConnection(const WifiSettings &settings, bool keepSetupAp) {
+bool startSetupAp() {
+    const bool started = WiFi.softAP("TipIn-Scoring-Gateway", "12345678");
+    wifiRecovery.fallbackAp = started;
+    if (!started) logMsg("[WiFi] ERROR: setup AP could not be enabled.");
+    return started;
+}
+
+void beginWifiConnection(const WifiSettings &requestedSettings, bool keepSetupAp) {
+    activeWifi = requestedSettings;
+    const WifiSettings &settings = activeWifi;
+    stationModeConfigured = true;
+    currentWifiSecurity = settings.security;
     WiFi.disconnect(false, true);
     esp_wifi_sta_wpa2_ent_disable();
-    WiFi.mode(keepSetupAp ? WIFI_AP_STA : WIFI_STA);
+    if (!WiFi.mode(keepSetupAp ? WIFI_AP_STA : WIFI_STA)) {
+        logMsg("[WiFi] ERROR: could not enable station mode.");
+        return;
+    }
     if (keepSetupAp) {
-        WiFi.softAP("TipIn-Scoring-Gateway", "12345678");
+        startSetupAp();
     }
     WiFi.setSleep(false);
     esp_wifi_set_ps(WIFI_PS_NONE);
 
     if (!applyStaticIp(settings)) {
-        logMsg("[WiFi] Invalid static configuration. Using DHCP.");
+        logMsg("[WiFi] Failed to apply IP configuration; connection not started.");
+        return;
     }
 
-    stationModeConfigured = true;
-    currentWifiSecurity = settings.security;
     if (settings.security == "enterprise") {
         const char *caCertificate = settings.caCertificate.length() > 0
             ? settings.caCertificate.c_str()
@@ -252,8 +304,8 @@ const char *wifiSecurityName(wifi_auth_mode_t mode) {
 }
 
 void triggerRestart(int delayMs) {
-    delay(delayMs);
-    ESP.restart();
+    wifiRestartScheduled = true;
+    wifiRestartAtMs = millis() + delayMs;
 }
 
 void clearFactorySettingsAndRestart(const String &reason) {
@@ -263,6 +315,8 @@ void clearFactorySettingsAndRestart(const String &reason) {
     prefs.clear();
     prefs.end();
     LittleFS.remove(WIFI_CA_CERT_PATH);
+    wifiTestActive = wifiTestStartRequested = bootWifiFallbackPending = false;
+    stationModeConfigured = false;
 
     // Clear ESP32 Wi-Fi credential cache to ensure true out-of-box networking state.
     WiFi.disconnect(true, true);
@@ -271,11 +325,17 @@ void clearFactorySettingsAndRestart(const String &reason) {
     triggerRestart(500);
 }
 
-bool ensureAdminAuth(AsyncWebServerRequest *req) {
+bool trackHttpIfAuthenticated(AsyncWebServerRequest *req) {
+    GatewayGuard guard(gatewayStateMutex);
     if (req->authenticate(adminUser.c_str(), adminPass.c_str())) {
+        clientHistory.http(req->client()->remoteIP().toString().c_str(), millis());
         return true;
     }
+    return false;
+}
 
+bool ensureAdminAuth(AsyncWebServerRequest *req) {
+    if (trackHttpIfAuthenticated(req)) return true;
     req->requestAuthentication();
     return false;
 }
@@ -303,6 +363,7 @@ String maskSecret(const String &secret) {
 
 // Helper: Package state JSON for REST and WebSocket
 void buildStateJson(JsonDocument &doc) {
+    GatewayGuard guard(gatewayStateMutex);
     // Hardware / System State
     doc["device"] = "TipIn Scoring Gateway";
     doc["ssid"] = WiFi.SSID();
@@ -407,6 +468,8 @@ void buildStateJson(JsonDocument &doc) {
 }
 
 void buildClockOnlyJson(JsonDocument &doc) {
+    GatewayGuard guard(gatewayStateMutex);
+    tipin::addFirmwareJson(doc);
     char clockBuf[12];
     snprintf(clockBuf, sizeof(clockBuf), "%02d:%02d", clockMin, clockSec);
 
@@ -431,6 +494,7 @@ void buildClockOnlyJson(JsonDocument &doc) {
 }
 
 void buildLegacySerialJson(JsonDocument &doc) {
+    GatewayGuard guard(gatewayStateMutex);
     doc["vendor"] = getLegacyVendorCode();
     doc["rxPin"] = 16;
     doc["txPin"] = 17;
@@ -480,63 +544,120 @@ void buildLegacySerialJson(JsonDocument &doc) {
 
 // Broadcast JSON State via WebSocket
 void broadcastStateWs() {
-    if (ws.count() == 0) return;
-
+    uint32_t ids[tipin::MAX_WS_CLIENTS];
+    size_t count = 0;
+    {
+        GatewayGuard guard(gatewayStateMutex);
+        for (const auto& item : clientHistory.sessions) {
+            if (item.open && item.authenticated) ids[count++] = item.id;
+        }
+    }
+    if (count == 0) return;
     JsonDocument doc;
     buildStateJson(doc);
     String response;
     serializeJson(doc, response);
-    ws.textAll(response);
+    for (size_t index = 0; index < count; index++) {
+        // Never hold the application mutex while acquiring the library's client-list mutex.
+        const bool sent = ws.availableForWrite(ids[index]) && ws.text(ids[index], response);
+        GatewayGuard guard(gatewayStateMutex);
+        auto* item = clientHistory.find(ids[index]);
+        if (item) tipin::recordSend(*item, sent, millis());
+        if (!sent) wsSkippedFrames++;
+    }
+}
+
+void serviceWsClients() {
+    for (size_t index = 0; index < tipin::MAX_WS_CLIENTS; index++) {
+        uint32_t id = 0;
+        uint32_t nonce = 0;
+        const char* reason = nullptr;
+        bool ping = false;
+        {
+            GatewayGuard guard(gatewayStateMutex);
+            auto& item = clientHistory.sessions[index];
+            if (!item.used || !item.websocket || !item.open) continue;
+            id = item.id;
+            const uint32_t now = millis();
+            reason = tipin::closeReason(item, now);
+            if (reason) {
+                clientHistory.disconnected(id, now);
+                wsTimeoutCount++;
+                logMsg("[WS] Closing ID " + String(id) + ": " + reason);
+            } else if (tipin::pingDue(item, now)) {
+                ping = true;
+                nonce = esp_random();
+                item.pingNonce = nonce;
+                item.pingAt = now;
+                item.pingPending = true;
+            }
+        }
+        if (reason) ws.close(id, 4008, reason);
+        else if (ping && !ws.ping(id, reinterpret_cast<const uint8_t*>(&nonce), sizeof(nonce))) {
+            // A failed enqueue still expires: a slow/broken peer cannot retain a slot forever.
+            logMsg("[WS] Ping enqueue failed for ID " + String(id));
+        }
+    }
 }
 
 // Handle WebSocket Inbound Messages
 void handleWsMessage(void *arg, uint8_t *data, size_t len, AsyncWebSocketClient *client) {
+    std::unique_lock<std::recursive_mutex> guard(gatewayStateMutex);
     AwsFrameInfo *info = (AwsFrameInfo*)arg;
     if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, data, len);
-        if (error) return;
+        if (error) {
+            guard.unlock();
+            client->text("{\"error\":\"invalid_json\"}");
+            return;
+        }
+        auto* remote = clientHistory.find(client->id());
+        if (!remote) return;
 
         // Authentication Handshake
         if (doc.containsKey("auth")) {
             String token = doc["auth"] | "";
             if (token == wsAuthSecret) {
-                client->_tempObject = (void*)1; // Mark client as authenticated
+                clientHistory.authenticated(client->id(), doc["client"] | "unknown", millis());
                 
                 JsonDocument ack;
                 ack["status"] = "authenticated";
                 ack["client"] = doc["client"] | "unknown";
                 String ackStr;
                 serializeJson(ack, ackStr);
-                client->text(ackStr);
                 logMsg("[WS] Client authenticated: ID " + String(client->id()));
+                guard.unlock();
+                client->text(ackStr);
                 return;
             } else {
-                client->text("{\"error\":\"invalid_auth\"}");
+                guard.unlock();
                 client->close(4001, "Unauthorized");
                 return;
             }
         }
 
         // Verify Authentication for Command Processing
-        if (client->_tempObject == nullptr) {
+        if (!remote->authenticated) {
+            guard.unlock();
             client->text("{\"type\":\"AUTH_REQUIRED\"}");
             return;
         }
 
         // Process Commands
         String cmd = doc["command"] | doc["cmd"] | "";
+        const char* commandResponse = nullptr;
 
         // Dynamic Mode Switching
         if (cmd == "emuOn" || doc["setMode"] == "emulator" || doc["mode"] == "emulator") {
             scoreboard_set_emulator(true);
             logMsg("[Mode] Switched to EMULATOR");
-            client->text("{\"status\":\"ok\",\"emulator\":true}");
+            commandResponse = "{\"status\":\"ok\",\"emulator\":true}";
         } 
         else if (cmd == "emuOff" || doc["setMode"] == "live" || doc["mode"] == "live") {
             scoreboard_set_emulator(false);
             logMsg("[Mode] Switched to LIVE SERIAL");
-            client->text("{\"status\":\"ok\",\"emulator\":false}");
+            commandResponse = "{\"status\":\"ok\",\"emulator\":false}";
         } 
         else if (cmd == "clockStart") {
             scoreboard_start_clock();
@@ -558,32 +679,59 @@ void handleWsMessage(void *arg, uint8_t *data, size_t len, AsyncWebSocketClient 
         }
 
         // Immediate Broadcast post-command
-        broadcastStateWs();
+        broadcastRequested = true;
+        guard.unlock();
+        if (commandResponse) client->text(commandResponse);
     }
 }
 
 // WebSocket Event Handler
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
     switch (type) {
-        case WS_EVT_CONNECT:
+        case WS_EVT_CONNECT: {
+            const String ip = client->remoteIP().toString();
+            bool accepted;
+            {
+                GatewayGuard guard(gatewayStateMutex);
+                accepted = clientHistory.connected(client->id(), ip.c_str(), millis()) != nullptr;
+            }
+            if (!accepted) {
+                logMsg("[WS] Connection rejected: viewer limit reached.");
+                client->close(1013, "Viewer limit reached");
+                break;
+            }
+            client->setCloseClientOnQueueFull(true);
             logMsg("[WS] Client connected: ID " + String(client->id()));
-            client->_tempObject = nullptr; // Unauthenticated by default
             client->text("{\"type\":\"AUTH_REQUIRED\"}");
             break;
-        case WS_EVT_DISCONNECT:
+        }
+        case WS_EVT_DISCONNECT: {
+            GatewayGuard guard(gatewayStateMutex);
+            clientHistory.disconnected(client->id(), millis());
             logMsg("[WS] Client disconnected: ID " + String(client->id()));
             break;
+        }
         case WS_EVT_DATA:
             handleWsMessage(arg, data, len, client);
             break;
-        case WS_EVT_PONG:
+        case WS_EVT_PONG: {
+            GatewayGuard guard(gatewayStateMutex);
+            clientHistory.pong(client->id(), data, len, millis());
+            break;
+        }
         case WS_EVT_ERROR:
+            logMsg("[WS] Protocol error for ID " + String(client->id()));
+            break;
+        default:
             break;
     }
 }
 
 void setup() {
     Serial.begin(115200);
+    logMsg(String("[Firmware] v") + tipin::FIRMWARE_VERSION + " | " +
+        TIPIN_GIT_REVISION + (TIPIN_GIT_DIRTY ? "-dirty" : "") +
+        " | built " + TIPIN_BUILD_TIMESTAMP);
 
     statusLed.begin();
     statusLed.clear();
@@ -604,12 +752,26 @@ void setup() {
     wsAuthSecret = prefs.getString("ws_secret", wsAuthSecret);
     prefs.end();
 
+    wifiEventQueue = xQueueCreate(16, sizeof(WifiEventRecord));
+    if (!wifiEventQueue) logMsg("[WiFi] ERROR: event queue allocation failed; event diagnostics unavailable.");
+    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+        if (event != ARDUINO_EVENT_WIFI_STA_DISCONNECTED &&
+            event != ARDUINO_EVENT_WIFI_STA_GOT_IP &&
+            event != ARDUINO_EVENT_WIFI_STA_LOST_IP) return;
+        const WifiEventRecord record{event, event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED
+            ? info.wifi_sta_disconnected.reason : static_cast<uint8_t>(0)};
+        if (!wifiEventQueue || xQueueSend(wifiEventQueue, &record, 0) != pdTRUE) wifiEventsDropped++;
+    });
+    WiFi.persistent(false);
+    WiFi.setAutoReconnect(false);
+
     // Configure WiFi
     WifiSettings storedWifi = loadWifiSettings();
     if (storedWifi.ssid.length() > 0) {
         beginWifiConnection(storedWifi, false);
         bootWifiFallbackPending = true;
         bootWifiConnectionStartedMs = millis();
+        wifiRecovery.begin(millis(), false);
 
     } else {
 
@@ -619,8 +781,7 @@ void setup() {
         WiFi.setSleep(false);
         esp_wifi_set_ps(WIFI_PS_NONE);
 
-        WiFi.softAP("TipIn-Scoring-Gateway", "12345678");
-        logMsg("Started AP Mode: TipIn-Scoring-Gateway");
+        if (startSetupAp()) logMsg("Started AP Mode: TipIn-Scoring-Gateway");
     }
 
 
@@ -632,6 +793,7 @@ void setup() {
 
     // Get Current System State
     server.on("/api/state", HTTP_GET, [](AsyncWebServerRequest *req) {
+        trackHttpIfAuthenticated(req);
         JsonDocument doc;
         buildStateJson(doc);
         String response;
@@ -641,6 +803,7 @@ void setup() {
 
     // Clock-only payload for Game Manager / minimal overlays.
     server.on("/api/state/clock", HTTP_GET, [](AsyncWebServerRequest *req) {
+        trackHttpIfAuthenticated(req);
         JsonDocument doc;
         buildClockOnlyJson(doc);
         String response;
@@ -650,6 +813,7 @@ void setup() {
 
     // Explicit full payload endpoint for full VMix templates.
     server.on("/api/state/full", HTTP_GET, [](AsyncWebServerRequest *req) {
+        trackHttpIfAuthenticated(req);
         JsonDocument doc;
         buildStateJson(doc);
         String response;
@@ -659,6 +823,7 @@ void setup() {
 
     // Compatibility endpoint used by debug page.
     server.on("/admin.json", HTTP_GET, [](AsyncWebServerRequest *req) {
+        trackHttpIfAuthenticated(req);
         JsonDocument doc;
         buildStateJson(doc);
         String response;
@@ -668,6 +833,7 @@ void setup() {
 
     // Compatibility endpoint used by serial analyzer page.
     server.on("/serial.json", HTTP_GET, [](AsyncWebServerRequest *req) {
+        trackHttpIfAuthenticated(req);
         JsonDocument doc;
         buildLegacySerialJson(doc);
         String response;
@@ -677,11 +843,26 @@ void setup() {
 
     // Lightweight in-memory gateway logs.
     server.on("/api/logs", HTTP_GET, [](AsyncWebServerRequest *req) {
+        GatewayGuard guard(gatewayStateMutex);
+        trackHttpIfAuthenticated(req);
         req->send(200, "text/plain", consoleLogs);
+    });
+
+    server.on("/api/clients", HTTP_GET, [](AsyncWebServerRequest *req) {
+        GatewayGuard guard(gatewayStateMutex);
+        if (!ensureAdminAuth(req)) return;
+        JsonDocument doc;
+        tipin::buildClientsJson(doc, clientHistory, millis());
+        String response;
+        serializeJson(doc, response);
+        AsyncWebServerResponse* reply = req->beginResponse(200, "application/json", response);
+        reply->addHeader("Cache-Control", "no-store");
+        req->send(reply);
     });
 
     // Authenticated token detail endpoint for admin reveal action.
     server.on("/api/ws-secret", HTTP_GET, [](AsyncWebServerRequest *req) {
+        GatewayGuard guard(gatewayStateMutex);
         if (!ensureAdminAuth(req)) {
             return;
         }
@@ -695,6 +876,7 @@ void setup() {
     });
 
     server.on("/api/wifi/scan", HTTP_GET, [](AsyncWebServerRequest *req) {
+        GatewayGuard guard(gatewayStateMutex);
         if (!ensureAdminAuth(req)) return;
 
         int16_t resultCount = WiFi.scanComplete();
@@ -740,6 +922,7 @@ void setup() {
     });
 
     server.on("/api/wifi/status", HTTP_GET, [](AsyncWebServerRequest *req) {
+        GatewayGuard guard(gatewayStateMutex);
         if (!ensureAdminAuth(req)) return;
         JsonDocument doc;
         doc["state"] = wifiTestState;
@@ -756,6 +939,7 @@ void setup() {
     // Test WiFi configuration, then save only after a successful connection.
     server.on("/api/wifi", HTTP_POST, [](AsyncWebServerRequest *req) {}, nullptr,
         [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total) {
+            GatewayGuard guard(gatewayStateMutex);
             constexpr size_t MAX_WIFI_REQUEST_BYTES = 12288;
             if (index == 0) {
                 if (!ensureAdminAuth(req)) return;
@@ -786,7 +970,11 @@ void setup() {
                 return;
             }
 
-            pendingWifi = WifiSettings();
+            if (wifiTestActive || wifiTestStartRequested || wifiRestartScheduled) {
+                req->send(409, "application/json", "{\"error\":\"wifi_change_in_progress\"}");
+                return;
+            }
+            WifiSettings pendingWifi;
             pendingWifi.ssid = doc["ssid"] | "";
             pendingWifi.security = doc["security"] | "personal";
             pendingWifi.password = doc["pass"] | "";
@@ -848,12 +1036,11 @@ void setup() {
                 }
             }
 
-            wifiTestActive = true;
-            wifiTestStartedMs = millis();
+            ::pendingWifi = pendingWifi;
+            wifiTestStartRequested = true;
             wifiTestState = "connecting";
             wifiTestMessage = "Testing connection before saving.";
             bootWifiFallbackPending = false;
-            beginWifiConnection(pendingWifi, true);
             req->send(202, "application/json", "{\"status\":\"testing\",\"message\":\"Testing WiFi connection.\"}");
         }
     );
@@ -861,6 +1048,7 @@ void setup() {
     // Command Endpoint (Admin REST Actions)
     server.on("/api/cmd", HTTP_POST, [](AsyncWebServerRequest *req) {}, nullptr, 
         [](AsyncWebServerRequest *req, uint8_t *data, size_t len, size_t index, size_t total) {
+            GatewayGuard guard(gatewayStateMutex);
             if (!ensureAdminAuth(req)) {
                 return;
             }
@@ -999,13 +1187,13 @@ void setup() {
                 triggerRestart(500);
             } else if (cmd == "factory") {
                 req->send(200, "application/json", "{\"status\":\"cleared\"}");
-                clearFactorySettingsAndRestart("factory command");
+                factoryResetRequested = true;
             } else {
                 req->send(400, "application/json", "{\"error\":\"unknown_command\"}");
             }
             
             // Broadcast state updates after REST command executes
-            broadcastStateWs();
+            broadcastRequested = true;
         }
     );
 
@@ -1057,8 +1245,34 @@ void setup() {
     logMsg("HTTP & WebSocket Server Started on Port " + String(HTTP_SERVER_PORT));
 }
 
-void loop() {
+void serviceGatewayState() {
+    GatewayGuard guard(gatewayStateMutex);
     updateStatusLed();
+
+    WifiEventRecord event;
+    while (wifiEventQueue && xQueueReceive(wifiEventQueue, &event, 0) == pdTRUE) {
+        if (event.type == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+            lastWifiDisconnectReason = event.reason;
+            lastWifiDisconnectAtMs = millis();
+            wifiDisconnectCount++;
+            wifiTestHasIp = false;
+            logMsg("[WiFi] Disconnected; reason=" + String(event.reason) +
+                " status=" + String(WiFi.status()));
+        } else if (event.type == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+            if (wifiTestActive && WiFi.SSID() == pendingWifi.ssid) wifiTestHasIp = true;
+            logMsg("[WiFi] IP acquired: " + WiFi.localIP().toString() +
+                " RSSI=" + String(WiFi.RSSI()));
+        } else {
+            wifiTestHasIp = false;
+            logMsg("[WiFi] Station lost its IP address.");
+        }
+    }
+
+    if (factoryResetRequested) {
+        factoryResetRequested = false;
+        factoryResetInProgress = true;
+        clearFactorySettingsAndRestart("factory command");
+    }
 
     // Physical BOOT button factory reset (hold for FACTORY_RESET_HOLD_MS).
     if (!factoryResetInProgress) {
@@ -1079,8 +1293,17 @@ void loop() {
     // Process scoreboard updates (either reading hardware serial or ticking emulator clock)
     scoreboard_loop();
 
+    if (wifiTestStartRequested) {
+        wifiTestStartRequested = false;
+        wifiTestActive = true;
+        wifiTestHasIp = false;
+        wifiTestStartedMs = millis();
+        wifiRecovery.begin(millis(), true);
+        beginWifiConnection(pendingWifi, true);
+    }
+
     if (wifiTestActive) {
-        if (WiFi.status() == WL_CONNECTED) {
+        if (wifiTestHasIp && WiFi.status() == WL_CONNECTED && WiFi.SSID() == pendingWifi.ssid) {
             wifiTestActive = false;
             wifiTestState = "success";
             wifiTestMessage = "Connection verified. Settings saved; rebooting.";
@@ -1096,6 +1319,7 @@ void loop() {
             logMsg("[WiFi] Connection test failed. Restoring previous settings.");
             WifiSettings storedWifi = loadWifiSettings();
             if (storedWifi.ssid.length() > 0) {
+                wifiRecovery.begin(millis(), true);
                 beginWifiConnection(storedWifi, true);
             } else {
                 WiFi.disconnect(false, true);
@@ -1111,8 +1335,7 @@ void loop() {
         } else if (millis() - bootWifiConnectionStartedMs >= WIFI_TEST_TIMEOUT_MS) {
             bootWifiFallbackPending = false;
             WiFi.mode(WIFI_AP_STA);
-            WiFi.softAP("TipIn-Scoring-Gateway", "12345678");
-            logMsg("[WiFi] Stored network unavailable. Setup AP enabled while reconnecting.");
+            if (startSetupAp()) logMsg("[WiFi] Stored network unavailable. Setup AP enabled while reconnecting.");
         }
     }
 
@@ -1121,22 +1344,47 @@ void loop() {
         return;
     }
 
-    if (
-        stationModeConfigured &&
-        !wifiTestActive &&
-        WiFi.status() != WL_CONNECTED &&
-        millis() - lastWifiReconnectAttemptMs >= WIFI_RECONNECT_INTERVAL_MS
-    ) {
-        lastWifiReconnectAttemptMs = millis();
-        wifiReconnectCount++;
-        WiFi.reconnect();
+    if (!wifiRestartScheduled) {
+        const auto action = wifiRecovery.next(stationModeConfigured, wifiTestActive,
+            WiFi.status() == WL_CONNECTED, millis());
+        if (action == tipin::RecoveryAction::Reconnect) {
+            wifiReconnectCount++;
+            const bool accepted = WiFi.reconnect();
+            logMsg("[WiFi] Reconnect #" + String(wifiReconnectCount) +
+                (accepted ? " requested." : " rejected by Wi-Fi driver."));
+        } else if (action == tipin::RecoveryAction::Reinitialize) {
+            wifiReinitializeCount++;
+            logMsg("[WiFi] Sustained outage; reinitializing radio #" + String(wifiReinitializeCount));
+            const bool keepAp = wifiRecovery.fallbackAp;
+            if (!WiFi.mode(WIFI_OFF)) logMsg("[WiFi] ERROR: radio shutdown failed; retrying station setup.");
+            beginWifiConnection(activeWifi, keepAp);
+        } else if (action == tipin::RecoveryAction::EnableAp) {
+            WiFi.mode(WIFI_AP_STA);
+            if (startSetupAp()) {
+                logMsg("[WiFi] Prolonged outage; setup AP enabled while station recovery continues.");
+            }
+        }
     }
 
+    if (millis() - lastHealthLogMs >= 60000) {
+        lastHealthLogMs = millis();
+        logMsg("[Health] uptimeMs=" + String(millis()) + " heap=" + String(ESP.getFreeHeap()) +
+            " minHeap=" + String(ESP.getMinFreeHeap()) +
+            " largestBlock=" + String(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)) +
+            " wifi=" + String(WiFi.status()) + " clients=" + String(clientHistory.openCount()) +
+            " eventDrops=" + String(wifiEventsDropped.load()));
+    }
+}
+
+void loop() {
+    serviceGatewayState();
+    serviceWsClients();
+
     // Clean up closed WebSocket connections
-    ws.cleanupClients();
+    ws.cleanupClients(tipin::MAX_WS_CLIENTS);
 
     // High-frequency WebSocket state broadcasting (~100ms ticks for sub-second precision)
-    if (millis() - lastWsBroadcast >= WS_BROADCAST_INTERVAL) {
+    if (broadcastRequested.exchange(false) || millis() - lastWsBroadcast >= WS_BROADCAST_INTERVAL) {
         lastWsBroadcast = millis();
         broadcastStateWs();
     }

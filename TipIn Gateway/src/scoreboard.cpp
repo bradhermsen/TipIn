@@ -1,4 +1,5 @@
 #include "scoreboard.h"
+#include "gateway_lock.h"
 
 #include <ctype.h>
 
@@ -290,7 +291,7 @@ static bool parseDaktronicsCgFrame(const char* frame, size_t frameLength) {
         clockRunning = frameRunning;
         homeScore = clampInt(parseFixedInt(frame, 8, 2, homeScore), 0, 199);
         awayScore = clampInt(parseFixedInt(frame, 10, 2, awayScore), 0, 199);
-        homeShots = clampInt(parseFixedInt(frame, 13, 3, homeShots), 0, 199);
+        homeShots = clampInt(parseFixedInt(frame, 14, 2, homeShots), 0, 199);
         awayShots = clampInt(parseFixedInt(frame, 16, 2, awayShots), 0, 199);
         currentPeriod = clampInt(parseFixedInt(frame, 18, 1, currentPeriod), 1, 9);
 
@@ -440,6 +441,7 @@ static void tickPenalties() {
 // Core API
 // -----------------------------------------------------------------------------
 void scoreboard_begin() {
+    GatewayGuard guard(gatewayStateMutex);
     // All Sport CG CONTROL feed through MAX3232: 9600 baud, 8N1, no flow control.
     Serial1.begin(9600, SERIAL_8N1, 16, 17);
     penaltyCount = 0;
@@ -448,6 +450,7 @@ void scoreboard_begin() {
 }
 
 void scoreboard_loop() {
+    GatewayGuard guard(gatewayStateMutex);
     // Process physical MAX3232 hardware serial data
     while (Serial1.available()) {
         uint8_t b = Serial1.read();
@@ -497,26 +500,31 @@ void scoreboard_loop() {
 // Control Handlers
 // -----------------------------------------------------------------------------
 void scoreboard_set_emulator(bool enable) {
+    GatewayGuard guard(gatewayStateMutex);
     emulatorModeActive = enable;
     Serial.printf("[Scoreboard] Emulator Mode explicitly %s\n", enable ? "ENABLED" : "DISABLED");
 }
 
 void scoreboard_start_clock() {
+    GatewayGuard guard(gatewayStateMutex);
     clockRunning = true;
     lastClockTick = millis();
 }
 
 void scoreboard_stop_clock() {
+    GatewayGuard guard(gatewayStateMutex);
     clockRunning = false;
 }
 
 void scoreboard_set_state(int home, int away, int period) {
+    GatewayGuard guard(gatewayStateMutex);
     homeScore = home;
     awayScore = away;
     currentPeriod = period;
 }
 
 void scoreboard_set_vendor(const String& vendorStr) {
+    GatewayGuard guard(gatewayStateMutex);
     if (vendorStr == "dak" || vendorStr == "daktronics") currentVendor = VENDOR_DAKTRONICS;
     else if (vendorStr == "nevco")  currentVendor = VENDOR_NEVCO;
     else if (vendorStr == "fair")   currentVendor = VENDOR_FAIRPLAY;
@@ -524,10 +532,12 @@ void scoreboard_set_vendor(const String& vendorStr) {
 }
 
 void scoreboard_set_mirror(bool enable) {
+    GatewayGuard guard(gatewayStateMutex);
     serialMirroringEnabled = enable;
 }
 
 String scoreboard_get_serial_trace() {
+    GatewayGuard guard(gatewayStateMutex);
     String trace;
     trace.reserve(serialTraceLength);
 

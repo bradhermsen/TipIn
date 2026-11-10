@@ -1629,6 +1629,7 @@ export default function App() {
     "home",
   );
   const [isRosterLoading, setIsRosterLoading] = useState(false);
+  const [isRosterStatusLoaded, setIsRosterStatusLoaded] = useState(false);
   const [rosterError, setRosterError] = useState("");
   const [rostersByTeam, setRostersByTeam] = useState<
     Record<string, RosterPlayer[]>
@@ -6143,22 +6144,28 @@ export default function App() {
     };
   }
 
-  async function fetchSavedLineup(gameId: string, teamId: string) {
-    try {
-      const response = await fetch(
-        `${activeApiBase}/games/${gameId}/teams/${teamId}/lineup-mobile`,
-        { headers: { "x-TipIn-access-code": session?.code ?? "" } },
-      );
-      if (!response.ok) return null;
-      return (await response.json()) as {
-        version: number;
-        starterIds: string[];
-        locked: boolean;
-        signedBy?: string | null;
-      };
-    } catch {
-      return null;
+  async function fetchSavedLineup(gameId: string, teamId: string, accessCode: string) {
+    const response = await fetch(
+      `${activeApiBase}/games/${gameId}/teams/${teamId}/lineup-mobile`,
+      { headers: { "x-TipIn-access-code": accessCode } },
+    );
+    if (!response.ok) {
+      throw new Error(`Unable to load saved lineup (${response.status}). Refresh the roster or sign in again.`);
     }
+    const saved: unknown = await response.json();
+    if (!saved || typeof saved !== "object"
+      || !("version" in saved) || typeof saved.version !== "number"
+      || !("locked" in saved) || typeof saved.locked !== "boolean"
+      || !("participantIds" in saved) || !Array.isArray(saved.participantIds) || !saved.participantIds.every((id: unknown) => typeof id === "string")
+      || !("starterIds" in saved) || !Array.isArray(saved.starterIds) || !saved.starterIds.every((id: unknown) => typeof id === "string")
+      || ("signedBy" in saved && saved.signedBy != null && typeof saved.signedBy !== "string")) {
+      throw new Error("The server returned an invalid saved lineup. Refresh the roster before making changes.");
+    }
+    return {
+      version: saved.version, locked: saved.locked,
+      participantIds: saved.participantIds as string[], starterIds: saved.starterIds as string[],
+      signedBy: "signedBy" in saved && typeof saved.signedBy === "string" ? saved.signedBy : null,
+    };
   }
 
   // Saves the current starters and signs the lineup in one step; throws a user-facing message on failure
@@ -6228,7 +6235,8 @@ export default function App() {
     }
   }
 
-  async function loadRosterAndCoaches(game: NextGame) {
+  async function loadRosterAndCoaches(game: NextGame, accessCode: string, preserveDraft = false) {
+    setIsRosterStatusLoaded(false);
     const homeId = game.homeTeamId;
     const awayId = game.awayTeamId;
     if (!homeId || !awayId) {
@@ -6254,18 +6262,6 @@ export default function App() {
         fetchMediaOutlets().catch(() => []),
       ]);
 
-      setRostersByTeam({
-        [homeId]: homeRoster,
-        [awayId]: awayRoster,
-      });
-
-      setCoachesByTeam({
-        [homeId]: homeCoaches,
-        [awayId]: awayCoaches,
-      });
-
-      setMediaOutletRecipients(mediaRecipients);
-
       const startersInit: Record<string, string[]> = {
         [homeId]: [],
         [awayId]: [],
@@ -6278,28 +6274,40 @@ export default function App() {
           [awayId]: awayRoster,
         };
         for (const teamId of [homeId, awayId]) {
-          const saved = await fetchSavedLineup(game.gameId, teamId);
-          if (!saved) continue;
+          const saved = await fetchSavedLineup(game.gameId, teamId, accessCode);
+          if (saved.version > 0) {
+            const participants = new Set(saved.participantIds.map((id) => id.toLowerCase()));
+            rosters[teamId] = rosters[teamId].map((player) => ({
+              ...player, isActive: participants.has(player.playerId.toLowerCase()),
+            }));
+          }
           const activeIds = new Set(
-            rosters[teamId].filter((p) => p.isActive).map((p) => p.playerId),
+            rosters[teamId].filter((p) => p.isActive).map((p) => p.playerId.toLowerCase()),
           );
-          startersInit[teamId] = (saved.starterIds ?? []).filter((id) =>
-            activeIds.has(id),
-          );
+          const starters = saved.version === 0 && preserveDraft ? startersByTeam[teamId] ?? [] : saved.starterIds;
+          const starterIds = new Set(starters.map((id) => id.toLowerCase()));
+          startersInit[teamId] = rosters[teamId].filter((p) => activeIds.has(p.playerId.toLowerCase())
+            && starterIds.has(p.playerId.toLowerCase())).map((p) => p.playerId);
           lineupInit[teamId] = { version: saved.version, locked: saved.locked };
           if (saved.locked && saved.signedBy) signaturesInit[teamId] = saved.signedBy;
         }
+        setRostersByTeam(rosters);
+      } else {
+        throw new Error("Game ID is missing. Cannot verify saved lineup status.");
       }
+      setCoachesByTeam({ [homeId]: homeCoaches, [awayId]: awayCoaches });
+      setMediaOutletRecipients(mediaRecipients);
       setStartersByTeam(startersInit);
       setLineupByTeam(lineupInit);
+      setIsRosterStatusLoaded(true);
 
       setHeadCoachSignatures(signaturesInit);
       setCurrentGoalieByTeam({
         [homeId]:
-          homeRoster.find((player) => player.isGoalie && player.isActive)
+          homeRoster.find((player) => player.isGoalie && startersInit[homeId].includes(player.playerId))
             ?.playerId ?? null,
         [awayId]:
-          awayRoster.find((player) => player.isGoalie && player.isActive)
+          awayRoster.find((player) => player.isGoalie && startersInit[awayId].includes(player.playerId))
             ?.playerId ?? null,
       });
       trace("roster.load.complete", {
@@ -6308,7 +6316,7 @@ export default function App() {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setRosterError("Unable to load roster/coaches.");
+      setRosterError(`Unable to load roster/coaches: ${message}`);
       trace("roster.load.error", { message });
     } finally {
       setIsRosterLoading(false);
@@ -6317,111 +6325,17 @@ export default function App() {
 
   async function refreshRosterAndCoaches() {
     if (!nextGame) return;
-
-    const homeId = nextGame.homeTeamId;
-    const awayId = nextGame.awayTeamId;
-    if (!homeId || !awayId) {
-      setRosterError("Game data is missing team IDs.");
-      return;
-    }
-
-    setIsRosterLoading(true);
-    setRosterError("");
-
-    try {
-      const [
-        homeRoster,
-        awayRoster,
-        homeCoaches,
-        awayCoaches,
-        mediaRecipients,
-      ] = await Promise.all([
-        fetchRosterForTeam(homeId),
-        fetchRosterForTeam(awayId),
-        fetchCoachesForTeam(homeId),
-        fetchCoachesForTeam(awayId),
-        fetchMediaOutlets().catch(() => []),
-      ]);
-
-      const preserveStarterSelections = (
-        teamId: string,
-        refreshedRoster: RosterPlayer[],
-      ) => {
-        setStartersByTeam((prev) => {
-          const existingSelections = prev[teamId] ?? [];
-          const refreshedActivePlayerIds = new Set(
-            refreshedRoster
-              .filter((player) => player.isActive)
-              .map((player) => player.playerId),
-          );
-
-          const nextSelections = existingSelections.filter((playerId) =>
-            refreshedActivePlayerIds.has(playerId),
-          );
-
-          if (nextSelections.length === existingSelections.length) {
-            return prev;
-          }
-
-          return {
-            ...prev,
-            [teamId]: nextSelections,
-          };
-        });
-      };
-
-      setRostersByTeam((prev) => ({
-        ...prev,
-        [homeId]: homeRoster,
-        [awayId]: awayRoster,
-      }));
-
-      setCoachesByTeam((prev) => ({
-        ...prev,
-        [homeId]: homeCoaches,
-        [awayId]: awayCoaches,
-      }));
-
-      setMediaOutletRecipients(mediaRecipients);
-
-      setCurrentGoalieByTeam((prev) => ({
-        ...prev,
-        [homeId]:
-          homeRoster.find((player) => player.isGoalie && player.isActive)
-            ?.playerId ??
-          prev[homeId] ??
-          null,
-        [awayId]:
-          awayRoster.find((player) => player.isGoalie && player.isActive)
-            ?.playerId ??
-          prev[awayId] ??
-          null,
-      }));
-
-      preserveStarterSelections(homeId, homeRoster);
-      preserveStarterSelections(awayId, awayRoster);
-
-      requestAnimationFrame(() => {
-        rosterScrollViewRef.current?.scrollTo({
-          y: rosterScrollOffsetRef.current,
-          animated: false,
-        });
-      });
-
-      trace("roster.refresh.complete", {
-        homeCount: homeRoster.length,
-        awayCount: awayRoster.length,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setRosterError("Unable to load roster/coaches.");
-      trace("roster.refresh.error", { message });
-    } finally {
-      setIsRosterLoading(false);
-    }
+    await loadRosterAndCoaches(nextGame, session?.code ?? "", true);
+    requestAnimationFrame(() => {
+      rosterScrollViewRef.current?.scrollTo({ y: rosterScrollOffsetRef.current, animated: false });
+    });
   }
 
   function toggleStarter(teamId: string, playerId: string) {
+    if (!isRosterStatusLoaded) {
+      setRosterError("Refresh the roster to verify its saved lineup status before making changes.");
+      return;
+    }
     if (lineupByTeam[teamId]?.locked) {
       setRosterError("This lineup is signed and locked. Ask an administrator to unlock it.");
       return;
@@ -6457,6 +6371,10 @@ export default function App() {
   }
 
   function togglePlayerActive(teamId: string, playerId: string) {
+    if (!isRosterStatusLoaded) {
+      setRosterError("Refresh the roster to verify its saved lineup status before making changes.");
+      return;
+    }
     if (lineupByTeam[teamId]?.locked) {
       setRosterError("This lineup is signed and locked. Ask an administrator to unlock it.");
       return;
@@ -6550,6 +6468,7 @@ export default function App() {
   async function loadNextGame(
     userId: string,
     refreshing = false,
+    accessCode = session?.code ?? "",
   ): Promise<{
     status: "games" | "no_games" | "invalid" | "error";
     message?: string;
@@ -6652,7 +6571,7 @@ export default function App() {
       if (earliest.sectionRegion) setupPatch.section = earliest.sectionRegion;
 
       updateSession(setupPatch);
-      await loadRosterAndCoaches(earliest);
+      await loadRosterAndCoaches(earliest, accessCode);
       return { status: "games" };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -6784,7 +6703,7 @@ export default function App() {
           setNextGame(resumeSnapshot.nextGame);
           setGameHasEnded(false);
           setStage("gameDashboard");
-          void loadRosterAndCoaches(resumeSnapshot.nextGame);
+          void loadRosterAndCoaches(resumeSnapshot.nextGame, accessCode);
           trace("activegame.resume.restored", {
             gameId: resumeSnapshot.nextGame.gameId,
           });
@@ -6810,7 +6729,7 @@ export default function App() {
     }
 
     setRestoreStatus("none");
-    const nextGameResult = await loadNextGame(response.userId);
+    const nextGameResult = await loadNextGame(response.userId, false, accessCode);
 
     if (nextGameResult.status === "invalid") {
       setError(nextGameResult.message || "That access code is not valid.");
@@ -7445,6 +7364,10 @@ export default function App() {
   }
 
   function beginHeadCoachSignature(teamId: string, teamName: string) {
+    if (!isRosterStatusLoaded) {
+      setRosterError("Refresh the roster to verify its saved lineup status before signing.");
+      return;
+    }
     const headCoach = (coachesByTeam[teamId] ?? []).find(
       (coach) => coach.roleName === "Head Coach",
     );
@@ -7534,6 +7457,10 @@ export default function App() {
   }
 
   async function goToOfficialsFromRoster() {
+    if (!isRosterStatusLoaded) {
+      setRosterError("Refresh the roster to verify its saved lineup status before continuing.");
+      return;
+    }
     if (!homeTeamId || !awayTeamId) {
       setRosterError("Missing home/away teams for roster verification.");
       return;
@@ -7996,6 +7923,9 @@ export default function App() {
             ) : (
               <>
                 <Text style={styles.sectionLabel}>ROSTER</Text>
+                {activeTeamId && lineupByTeam[activeTeamId]?.locked ? (
+                  <Text style={styles.note}>Signed and locked. An administrator must unlock this lineup before it can be changed.</Text>
+                ) : null}
                 <View style={styles.tabRow}>
                   <Pressable
                     style={[
@@ -8066,11 +7996,11 @@ export default function App() {
                       >
                         <Pressable
                           style={styles.starterToggleWrap}
+                          disabled={!isRosterStatusLoaded || !!(activeTeamId && lineupByTeam[activeTeamId]?.locked)}
                           hitSlop={8}
                           onPress={() => {
                             if (!activeTeamId) return;
                             toggleStarter(activeTeamId, player.playerId);
-                            setRosterError("");
                           }}
                         >
                           <View
@@ -8104,6 +8034,7 @@ export default function App() {
                           {player.fullName}
                         </Text>
                         <Pressable
+                          disabled={!isRosterStatusLoaded || !!(activeTeamId && lineupByTeam[activeTeamId]?.locked)}
                           style={[
                             styles.activeToggle,
                             player.isActive
@@ -8114,7 +8045,6 @@ export default function App() {
                           onPress={() => {
                             if (!activeTeamId) return;
                             togglePlayerActive(activeTeamId, player.playerId);
-                            setRosterError("");
                           }}
                         >
                           <View
