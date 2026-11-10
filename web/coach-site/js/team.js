@@ -8,7 +8,7 @@ export async function teamHeader(teamId, active) {
   try {
     const teams = await api(`/coachteams/coach/${getSession().userId}`);
     multiple = teams.length > 1;
-    name = (teams.find((t) => t.teamId === teamId) || {}).teamName || name;
+    name = (teams.find((t) => t.teamId === teamId) || {}).teamDisplayName || name;
   } catch {
     /* the header still works without the name */
   }

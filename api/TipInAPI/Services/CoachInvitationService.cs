@@ -28,6 +28,9 @@ namespace TipInAPI.Services
         public Guid InvitationId { get; set; }
         public Guid TeamId { get; set; }
         public string TeamName { get; set; } = "";
+        public string? LevelName { get; set; }
+        public string? TeamType { get; set; }
+        public string TeamDisplayName => Infrastructure.TeamNameFormatter.Format(TeamName, LevelName, TeamType);
         public string Email { get; set; } = "";
         public DateTime ExpiresAtUtc { get; set; }
         public string Token { get; set; } = "";
@@ -102,9 +105,12 @@ namespace TipInAPI.Services
             using var tx = conn.BeginTransaction();
             try
             {
-                var teamName = await conn.ExecuteScalarAsync<string?>(
-                    "SELECT Name FROM dbo.Teams WHERE Id = @TeamId", new { TeamId = teamId }, tx);
-                if (teamName == null)
+                var team = await conn.QuerySingleOrDefaultAsync<DTOs.CoachTeamDetailDto>(@"
+                    SELECT t.Name AS TeamName, l.Name AS LevelName, t.TeamType
+                    FROM dbo.Teams t
+                    LEFT JOIN dbo.Levels l ON l.Id = t.LevelId
+                    WHERE t.Id = @TeamId", new { TeamId = teamId }, tx);
+                if (team == null)
                     throw new InvalidOperationException("Team not found.");
 
                 await conn.ExecuteAsync(@"
@@ -134,7 +140,9 @@ namespace TipInAPI.Services
                 {
                     InvitationId = invitationId,
                     TeamId = teamId,
-                    TeamName = teamName,
+                    TeamName = team.TeamName!,
+                    LevelName = team.LevelName,
+                    TeamType = team.TeamType,
                     Email = email,
                     ExpiresAtUtc = expires,
                     Token = token

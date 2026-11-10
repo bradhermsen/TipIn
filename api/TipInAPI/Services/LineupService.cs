@@ -65,6 +65,9 @@ namespace TipInAPI.Services
         public string? Status { get; set; }
         public bool IsHome { get; set; }
         public string? OpponentName { get; set; }
+        public string? OpponentLevelName { get; set; }
+        public string? OpponentTeamType { get; set; }
+        public string OpponentDisplayName => Infrastructure.TeamNameFormatter.Format(OpponentName, OpponentLevelName, OpponentTeamType);
         public bool Locked { get; set; }
     }
 
@@ -392,11 +395,13 @@ namespace TipInAPI.Services
                 SELECT g.GameId, g.GameDateTime, g.Status,
                        CASE WHEN g.HomeTeamId = @TeamId THEN 1 ELSE 0 END AS IsHome,
                        opp.Name AS OpponentName,
+                       ol.Name AS OpponentLevelName, opp.TeamType AS OpponentTeamType,
                        CASE WHEN (SELECT TOP 1 e.EventType FROM dbo.GameLineupEvents e
                                   WHERE e.GameId = g.GameId AND e.TeamId = @TeamId
                                   ORDER BY e.CreatedAtUtc DESC, e.EventId DESC) = 'Sign' THEN 1 ELSE 0 END AS Locked
                 FROM dbo.Games g
                 INNER JOIN dbo.Teams opp ON opp.Id = CASE WHEN g.HomeTeamId = @TeamId THEN g.AwayTeamId ELSE g.HomeTeamId END
+                LEFT JOIN dbo.Levels ol ON ol.Id = opp.LevelId
                 WHERE @TeamId IN (g.HomeTeamId, g.AwayTeamId)
                   AND ISNULL(g.Status, '') <> 'Cancelled'
                   AND g.GameDateTime >= DATEADD(DAY, -7, SYSUTCDATETIME())

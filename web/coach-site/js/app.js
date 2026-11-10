@@ -201,7 +201,7 @@ async function renderHome(session) {
   }
   if (teams.length === 1) return navigate(`/teams/${teams[0].teamId}`, true);
   app.innerHTML = `<h1>Your teams</h1>` + (teams.length
-    ? teams.map((t) => `<a class="card" href="/teams/${esc(t.teamId)}" data-link><b>${esc(t.teamName)}</b></a>`).join("")
+    ? teams.map((t) => `<a class="card" href="/teams/${esc(t.teamId)}" data-link><b>${esc(t.teamDisplayName)}</b></a>`).join("")
     : `<div class="card muted">No teams are assigned to your account yet. Ask your administrator for an invitation.</div>`);
 }
 

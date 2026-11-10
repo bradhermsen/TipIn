@@ -13,6 +13,9 @@ namespace TipInAPI.DTOs
         // Returned when querying teams for a coach
         public Guid TeamId { get; set; }
         public string? TeamName { get; set; }
+        public string? LevelName { get; set; }
+        public string? TeamType { get; set; }
+        public string TeamDisplayName => Infrastructure.TeamNameFormatter.Format(TeamName, LevelName, TeamType);
         public string? Abbreviation { get; set; }
     }
 }

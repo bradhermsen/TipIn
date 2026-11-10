@@ -56,8 +56,13 @@ namespace TipInAPI.Tests
         public async Task ListGamesForTeam_ReturnsUpcomingGames_WithOpponentAndLockState()
         {
             using (var conn = _db.Factory.CreateConnection())
+            {
                 conn.Execute("UPDATE Games SET Status = 'Cancelled' WHERE HomeTeamId = @t AND AwayTeamId = @v",
                     new { t = _db.HostTeamId, v = _db.VisitorTeamId });
+                conn.Execute(@"UPDATE Teams SET Name = 'Riverbend', TeamType = 'Boys',
+                    LevelId = (SELECT Id FROM Levels WHERE Name = 'JV') WHERE Id = @id",
+                    new { id = _db.OtherTeamId });
+            }
 
             var games = (await _lineups.ListGamesForTeamAsync(_db.HostTeamId)).ToList();
 
@@ -66,6 +71,9 @@ namespace TipInAPI.Tests
             Assert.True(mine.IsHome);
             Assert.False(mine.Locked);
             Assert.False(string.IsNullOrEmpty(mine.OpponentName));
+            Assert.Equal("JV", mine.OpponentLevelName);
+            Assert.Equal("Boys", mine.OpponentTeamType);
+            Assert.Equal("Riverbend JV - Boys", mine.OpponentDisplayName);
         }
 
         [Fact]
