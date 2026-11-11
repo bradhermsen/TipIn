@@ -592,6 +592,33 @@ window.PageContentRegistry["settings-email"] = () => `
     </section>
   </div>
 
+  <section id="coach-email-log" class="nf-card settings-card mt-4" hidden>
+    <h3 class="section-header">Automated Email Log</h3>
+    <p class="settings-helper-text">Automated coach invitations and roster/lineup reminders only.
+      Times and selected dates are Central. Sent means SMTP accepted the message, not confirmed inbox delivery.
+      These are delivery tracking entries, not an email count: an invitation can also mark a reminder stage as sent.</p>
+    <div class="settings-email-log-controls">
+      <label class="settings-field"><span>Date (Central)</span>
+        <input id="email-log-date" class="nf-input" type="date" min="2000-01-01" max="9998-12-31" />
+      </label>
+      <button id="email-log-refresh" class="nf-btn nf-btn-secondary" type="button">Refresh</button>
+    </div>
+    <div id="email-log-status" class="settings-save-status" role="status" aria-live="polite"></div>
+    <div class="settings-email-log-table-wrap">
+      <table class="settings-email-log-table">
+        <thead><tr><th scope="col">Recorded (Central)</th><th scope="col">Sent (Central)</th>
+          <th scope="col">Recipient</th><th scope="col">Team</th><th scope="col">Game</th>
+          <th scope="col">Type</th><th scope="col">Status</th></tr></thead>
+        <tbody id="email-log-rows"></tbody>
+      </table>
+    </div>
+    <div class="settings-email-log-controls mt-3">
+      <button id="email-log-previous" class="nf-btn nf-btn-secondary" type="button" disabled>Previous</button>
+      <span id="email-log-page"></span>
+      <button id="email-log-next" class="nf-btn nf-btn-secondary" type="button" disabled>Next</button>
+    </div>
+  </section>
+
   <div class="nf-card settings-card mt-4">
     <h3 class="section-header">Media Outlet Recipients</h3>
     <p class="settings-helper-text">

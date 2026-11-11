@@ -8,6 +8,21 @@
 GET {{baseUrl}}/email/automation
 Authorization: Bearer {{superAdminToken}}
 
+### Read-only automated email tracking log; Central calendar date, 100 entries per page
+GET {{baseUrl}}/email/automation/log?date=2026-11-11&page=1
+Authorization: Bearer {{superAdminToken}}
+
+### Invalid calendar date returns 400
+GET {{baseUrl}}/email/automation/log?date=2026-02-30
+Authorization: Bearer {{superAdminToken}}
+
+### Log requires authentication (401)
+GET {{baseUrl}}/email/automation/log
+
+### Non-SuperAdmin log request returns 403
+GET {{baseUrl}}/email/automation/log?date=2026-11-11
+Authorization: Bearer {{headCoachToken}}
+
 ### All automations off; manual invitations remain available
 PUT {{baseUrl}}/email/automation
 Authorization: Bearer {{superAdminToken}}

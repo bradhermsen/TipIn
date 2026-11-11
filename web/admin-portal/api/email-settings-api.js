@@ -1,4 +1,10 @@
 window.EmailSettingsApi = {
+  async getAutomationLog(date, page = 1) {
+    const query = new URLSearchParams({ date, page: String(page) });
+    const res = await authFetch(`/email/automation/log?${query}`);
+    if (!res || !res.ok) throw new Error(await readErrorMessage(res, "Failed to load automated email log."));
+    return res.json();
+  },
   async getAutomation() {
     const res = await authFetch("/email/automation");
     if (!res || !res.ok) throw new Error(await readErrorMessage(res, "Failed to load email automation settings."));

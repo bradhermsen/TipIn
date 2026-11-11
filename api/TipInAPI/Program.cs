@@ -71,6 +71,7 @@ var host = new HostBuilder()
         services.AddScoped<ICoachInvitationService, CoachInvitationService>();
         services.AddScoped<CoachReminderService>();
         services.AddScoped<ICoachEmailAutomationSettingsService, CoachEmailAutomationSettingsService>();
+        services.AddScoped<ICoachEmailLogService, CoachEmailLogService>();
         services.AddScoped<ICoachRosterService, CoachRosterService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<ILineupService, LineupService>();

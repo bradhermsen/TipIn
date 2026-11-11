@@ -71,11 +71,12 @@ namespace TipInAPI.Tests
         {
             using var services = CreateServices();
             var state = new AutomationState();
-            var functions = new CoachEmailAutomationFunctions(new TestAuthorization(Guid.NewGuid(), role), state, new ConfigurationBuilder().Build());
+            var functions = new CoachEmailAutomationFunctions(new TestAuthorization(Guid.NewGuid(), role), state, new ConfigurationBuilder().Build(), new EmailLogState());
             var request = new TestRequest(new TestContext(services));
             request.Headers.Add("Authorization", "Bearer fixture");
             Assert.Equal(HttpStatusCode.Forbidden, (await functions.Get(request, default)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await functions.Put(request, default)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await functions.GetLog(request, default)).StatusCode);
             Assert.False(state.Settings.AutomaticInvitations);
         }
 
@@ -84,7 +85,7 @@ namespace TipInAPI.Tests
         {
             using var services = CreateServices();
             var state = new AutomationState();
-            var functions = new CoachEmailAutomationFunctions(new TestAuthorization(Guid.NewGuid(), "SuperAdmin"), state, new ConfigurationBuilder().Build());
+            var functions = new CoachEmailAutomationFunctions(new TestAuthorization(Guid.NewGuid(), "SuperAdmin"), state, new ConfigurationBuilder().Build(), new EmailLogState());
             var request = new TestRequest(new TestContext(services));
             Assert.Equal(HttpStatusCode.Unauthorized, (await functions.Get(request, default)).StatusCode);
             request.Headers.Add("Authorization", "Bearer fixture");
@@ -221,6 +222,57 @@ namespace TipInAPI.Tests
             Assert.Equal(status, response.StatusCode);
         }
 
+        private sealed class EmailLogState : ICoachEmailLogService
+        {
+            public int Calls;
+            public Task<CoachEmailLogResponse> GetAsync(DateOnly date, int page, CancellationToken cancellationToken)
+            {
+                Calls++;
+                return Task.FromResult(new CoachEmailLogResponse(date.ToString("yyyy-MM-dd"), page, false,
+                    Array.Empty<CoachEmailLogEntry>()));
+            }
+        }
+
+        [Theory]
+        [InlineData("?date=2026-02-30")]
+        [InlineData("?date=2026-11-11&page=0")]
+        [InlineData("?date=2026-11-11&page=10001")]
+        [InlineData("?date=9999-12-31")]
+        [InlineData("?date=")]
+        [InlineData("?page=abc")]
+        public async Task EmailLog_RejectsInvalidFiltersBeforeQuerying(string query)
+        {
+            using var services = CreateServices();
+            var log = new EmailLogState();
+            var functions = new CoachEmailAutomationFunctions(new TestAuthorization(Guid.NewGuid(), "SuperAdmin"),
+                new AutomationState(), new ConfigurationBuilder().Build(), log);
+            var request = new TestRequest(new TestContext(services), query);
+            request.Headers.Add("Authorization", "Bearer test");
+            Assert.Equal(HttpStatusCode.BadRequest, (await functions.GetLog(request, default)).StatusCode);
+            Assert.Equal(0, log.Calls);
+        }
+
+        [Fact]
+        public async Task EmailLog_RequiresAuthentication_ReturnsRequestedPage_AndDisablesCaching()
+        {
+            using var services = CreateServices();
+            var log = new EmailLogState();
+            var functions = new CoachEmailAutomationFunctions(new TestAuthorization(Guid.NewGuid(), "SuperAdmin"),
+                new AutomationState(), new ConfigurationBuilder().Build(), log);
+            var request = new TestRequest(new TestContext(services), "?date=2026-11-11&page=2");
+            Assert.Equal(HttpStatusCode.Unauthorized, (await functions.GetLog(request, default)).StatusCode);
+            Assert.Equal(0, log.Calls);
+            request.Headers.Add("Authorization", "Bearer test");
+            var response = await functions.GetLog(request, default);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("no-store", response.Headers.GetValues("Cache-Control"));
+            response.Body.Position = 0;
+            using var json = await JsonDocument.ParseAsync(response.Body);
+            Assert.Equal("2026-11-11", json.RootElement.GetProperty("date").GetString());
+            Assert.Equal(2, json.RootElement.GetProperty("page").GetInt32());
+            Assert.Empty(json.RootElement.GetProperty("items").EnumerateArray());
+        }
+
         private static ServiceProvider CreateServices()
         {
             var services = new ServiceCollection();
@@ -245,11 +297,12 @@ namespace TipInAPI.Tests
 
         private sealed class TestRequest : HttpRequestData
         {
-            public TestRequest(FunctionContext context) : base(context) { }
+            private readonly string _query;
+            public TestRequest(FunctionContext context, string query = "") : base(context) { _query = query; }
             public override Stream Body { get; } = new MemoryStream();
             public override HttpHeadersCollection Headers { get; } = new();
             public override IReadOnlyCollection<IHttpCookie> Cookies => Array.Empty<IHttpCookie>();
-            public override Uri Url => new("https://localhost/api/test");
+            public override Uri Url => new("https://localhost/api/test" + _query);
             public override IEnumerable<ClaimsIdentity> Identities => Array.Empty<ClaimsIdentity>();
             public override string Method => "PUT";
             public override HttpResponseData CreateResponse() => new TestResponse(FunctionContext);

@@ -2,6 +2,33 @@
   border: 1px solid var(--nf-border-light);
 }
 
+.settings-email-log-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+
+.settings-email-log-table-wrap {
+  overflow-x: auto;
+}
+
+.settings-email-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.settings-email-log-table th,
+.settings-email-log-table td {
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--nf-border-light);
+  overflow-wrap: anywhere;
+  min-width: 100px;
+}
+
 .settings-helper-text {
   color: var(--nf-text-muted);
   font-size: 13px;

@@ -13,6 +13,7 @@ Admins invite coaches to specific teams. Coaches get a mobile-first area where t
 | Unlock | Admins only (SuperAdmin, OrgAdmin, OrgOwner), admin portal only. Reason required, logged. Coach must re-sign. |
 | Coach app hosting | Separate site on its own subdomain (e.g. coach.tipinscoring.com), not part of the admin portal. |
 | Email | Existing SMTP email service and admin email settings are reused. |
+| Automated email log | Settings / Email shows a read-only SuperAdmin-only log below the Email Server card. Defaults to today in Central Time; date selection, refresh, and 100-entry paging are available. Includes automated invitations and roster/lineup reminder tracking only, not manual invitations, scoresheets, or test emails. Sent means SMTP handoff, not inbox delivery. Invitation sends can also mark a reminder stage as sent, so entries are not a physical email count. NeedsReview and Sending are unconfirmed outcomes and are not automatically retried from this screen. |
 | Team labels | Invitation email subjects/bodies and coach-site team lists, headers, and opponents use `Team Level - Type` (for example, `Riverbend JV - Boys`). Missing level/type values are omitted. Raw API team names are preserved; display labels are additive. |
 | Concurrent edits | Version check. Stale save rejected and the app reloads. No merge logic. |
 | Coach email | Automated verification email. |
