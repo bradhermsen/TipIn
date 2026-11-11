@@ -4,6 +4,7 @@ import { renderRoster } from "./roster.js";
 import { renderGames, renderLineup } from "./lineup.js";
 import { renderCoaches } from "./coaches.js";
 import { loginPath, loginDestination } from "./navigation.js";
+import { renderAllPlayers, renderPrintRoster } from "./players.js";
 
 const app = $("#app");
 const topbar = $("#topbar");
@@ -206,7 +207,8 @@ async function renderHome(session) {
   }
   const gameResults = await Promise.allSettled(teams.map((t) => api(`/coach/teams/${t.teamId}/games`)));
   if (location.pathname !== "/") return;
-  app.innerHTML = `<header class="teams-heading"><h1>Your Teams</h1><p class="muted">Hockey</p></header>` + (teams.length
+  app.innerHTML = `<header class="teams-heading"><h1>Your Teams</h1><p class="muted">Hockey</p></header>
+    <p><a class="action-link" href="/players" data-link>View all players</a></p>` + (teams.length
     ? teams.map((t, i) => {
       const result = gameResults[i];
       const pending = result.status === "fulfilled" ? result.value.filter((g) => needsLineup(g)) : [];
@@ -248,9 +250,11 @@ export async function route() {
   if (path === "/accept") return renderAccept(fragmentToken);
 
   if (path === "/") return renderHome(session);
+  if (path === "/players") return renderAllPlayers(app, navigate);
   let m;
   if ((m = /^\/teams\/([0-9a-f-]{36})$/i.exec(path))) return renderGames(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/roster$/i.exec(path))) return renderRoster(app, m[1], navigate);
+  if ((m = /^\/teams\/([0-9a-f-]{36})\/roster\/print$/i.exec(path))) return renderPrintRoster(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/coaches$/i.exec(path))) return renderCoaches(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games$/i.exec(path))) return renderGames(app, m[1], navigate);
   if ((m = /^\/teams\/([0-9a-f-]{36})\/games\/([0-9a-f-]{36})$/i.exec(path))) return renderLineup(app, m[1], m[2], navigate);

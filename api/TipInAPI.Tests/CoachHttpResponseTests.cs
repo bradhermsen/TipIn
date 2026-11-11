@@ -135,6 +135,9 @@ namespace TipInAPI.Tests
             var request = new TestRequest(new TestContext(services));
             request.Headers.Add("Authorization", "Bearer fixture");
             Assert.Equal(expected, (await functions.GetStaff(request, team)).StatusCode);
+            var rosterRequest = new TestRequest(new TestContext(services), "?includeInactive=true");
+            rosterRequest.Headers.Add("Authorization", "Bearer test");
+            Assert.Equal(expected, (await functions.GetRoster(rosterRequest, team)).StatusCode);
             await JsonSerializer.SerializeAsync(request.Body, new { name = "Test Assistant" });
             request.Body.Position = 0;
             Assert.Equal(expected, (await functions.UpdateAssistant(request, team, 1)).StatusCode);
@@ -147,6 +150,7 @@ namespace TipInAPI.Tests
             var functions = new CoachRosterFunctions(null!, null!, null!, null!);
             var request = new TestRequest(new TestContext(services));
             Assert.Equal(HttpStatusCode.Unauthorized, (await functions.GetStaff(request, Guid.NewGuid())).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await functions.GetRoster(request, Guid.NewGuid())).StatusCode);
             Assert.Equal(HttpStatusCode.Unauthorized, (await functions.UpdateAssistant(request, Guid.NewGuid(), 1)).StatusCode);
         }
 
@@ -220,6 +224,39 @@ namespace TipInAPI.Tests
                 _ => await AuthorizationHelper.ForbiddenResponse(request)
             };
             Assert.Equal(status, response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("?includeInactive=true", HttpStatusCode.OK, 2)]
+        [InlineData("?includeInactive=false", HttpStatusCode.OK, 1)]
+        [InlineData("", HttpStatusCode.OK, 1)]
+        [InlineData("?includeInactive=garbage", HttpStatusCode.BadRequest, 0)]
+        public async Task RosterEndpoint_ValidatesInclusiveFlag_AndReturnsInactiveStatus(string query, HttpStatusCode expected, int count)
+        {
+            using var db = new TestDatabase();
+            using var services = CreateServices();
+            var user = db.AddCoach(db.HostTeamId);
+            var service = new CoachRosterService(db.Factory);
+            await service.AddPlayerAsync(user, db.HostTeamId, new AddRosterPlayerRequest
+                { FirstName = "Active", LastName = "Player", JerseyNumber = 1 });
+            await service.AddPlayerAsync(user, db.HostTeamId, new AddRosterPlayerRequest
+                { FirstName = "Removed", LastName = "Player", JerseyNumber = 2 });
+            using var conn = db.Factory.CreateConnection();
+            conn.Execute("UPDATE RosterEntries SET RemovedAtUtc=SYSUTCDATETIME() WHERE TeamId=@team AND JerseyNumber=2",
+                new { team = db.HostTeamId });
+            var functions = new CoachRosterFunctions(service, new TestAuthorization(user, "Coach"),
+                new TeamAuthorizationService(db.Factory), new CoachTeamsService(new CoachTeamsRepository(db.Factory)));
+            var request = new TestRequest(new TestContext(services), query);
+            request.Headers.Add("Authorization", "Bearer test");
+            var response = await functions.GetRoster(request, db.HostTeamId);
+            Assert.Equal(expected, response.StatusCode);
+            if (expected != HttpStatusCode.OK) return;
+            Assert.Contains("no-store", response.Headers.GetValues("Cache-Control"));
+            response.Body.Position = 0;
+            using var json = await JsonDocument.ParseAsync(response.Body);
+            Assert.Equal(count, json.RootElement.GetArrayLength());
+            Assert.True(json.RootElement[0].GetProperty("isRosterActive").GetBoolean());
+            if (count == 2) Assert.False(json.RootElement[1].GetProperty("isRosterActive").GetBoolean());
         }
 
         private sealed class EmailLogState : ICoachEmailLogService

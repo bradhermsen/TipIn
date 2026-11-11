@@ -38,6 +38,28 @@ namespace TipInAPI.Tests
             });
 
         [Fact]
+        public async Task InclusiveRoster_ReturnsRemovedAndInactivePlayers_WithoutChangingDefaultMemberships()
+        {
+            var active = await AddNew("Active", "Player", 1);
+            var removed = await AddNew("Removed", "Player", 2);
+            var inactive = await AddNew("Inactive", "Player", 3);
+            await _roster.RemovePlayerAsync(_actor, _db.HostTeamId, EntryId(removed));
+            using (var conn = _db.Factory.CreateConnection())
+            {
+                Dapper.SqlMapper.Execute(conn, "UPDATE Players SET IsActive=0 WHERE PlayerId=@id", new { id = PlayerId(inactive) });
+                // Legacy game-day toggles must not turn a roster membership inactive.
+                Dapper.SqlMapper.Execute(conn, "UPDATE RosterEntries SET IsActive=0 WHERE Id=@id", new { id = EntryId(active) });
+            }
+            Assert.Equal(2, (await _roster.GetRosterAsync(_db.HostTeamId)).Count());
+            var all = (await _roster.GetRosterAsync(_db.HostTeamId, includeInactive: true)).ToList();
+            Assert.Equal(3, all.Count);
+            Assert.True(all.Single(p => p.RosterEntryId == EntryId(active)).IsRosterActive);
+            Assert.False(all.Single(p => p.RosterEntryId == EntryId(removed)).IsRosterActive);
+            Assert.False(all.Single(p => p.RosterEntryId == EntryId(inactive)).IsRosterActive);
+            Assert.Empty(await _roster.GetRosterAsync(_db.OtherTeamId, includeInactive: true));
+        }
+
+        [Fact]
         public async Task AddNewPlayer_CreatesPlayerInTeamOrganization_AndRosterEntry()
         {
             var result = await AddNew("Ava", "Larsen", 12);

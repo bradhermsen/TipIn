@@ -1,0 +1,18 @@
+@baseUrl = http://localhost:7071/api
+@coachToken = REPLACE_WITH_COACH_TOKEN
+@teamId = 11111111-2222-3333-4444-555555555555
+
+### Existing roster behavior: removed entries excluded
+GET {{baseUrl}}/coach/teams/{{teamId}}/roster
+Authorization: Bearer {{coachToken}}
+
+### Print/all-player views: all memberships, including inactive/removed entries
+GET {{baseUrl}}/coach/teams/{{teamId}}/roster?includeInactive=true
+Authorization: Bearer {{coachToken}}
+
+### Invalid flag returns 400 for authorized callers
+GET {{baseUrl}}/coach/teams/{{teamId}}/roster?includeInactive=invalid
+Authorization: Bearer {{coachToken}}
+
+### No token returns 401; an unassigned team with a coach token returns 403
+GET {{baseUrl}}/coach/teams/{{teamId}}/roster?includeInactive=true
