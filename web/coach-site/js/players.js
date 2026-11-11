@@ -83,7 +83,7 @@ export async function renderPrintRoster(app, teamId, navigate) {
       <button type="button" id="print-roster">Print / Save PDF</button>
       <span id="print-status" role="status"></span></div>
       <article class="print-roster">
-        <header class="print-roster-heading"><img src="/assets/tipin-logo.png" alt="TipIn Scoring" />
+        <header class="print-roster-heading"><img src="/assets/tipin-print-logo.svg" alt="TipIn Scoring" />
           <div><h1>${esc(team.teamDisplayName || "Team")} Roster</h1>
           <p>All players - active and inactive</p></div></header>
         <p>${players.length} player${players.length === 1 ? "" : "s"} | Printed ${esc(new Date().toLocaleDateString())}</p>

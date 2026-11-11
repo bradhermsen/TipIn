@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
 import { rosterTable, sortRoster } from "../js/players.js";
+
+test("print roster uses the separate supplied logo without replacing site branding", () => {
+  const source = readFileSync(new URL("../js/players.js", import.meta.url), "utf8");
+  assert.match(source, /src="\/assets\/tipin-print-logo\.svg"/);
+  assert.ok(existsSync(new URL("../assets/tipin-print-logo.svg", import.meta.url)));
+  const site = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(site, /src="\/assets\/tipin-logo\.png"/);
+});
 
 test("printable roster includes every membership and escapes player fields", () => {
   const rows = [
