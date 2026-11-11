@@ -6,10 +6,11 @@ test("emailed lineup links survive login and page reloads", () => {
   const path = "/teams/11111111-2222-3333-4444-555555555555/games/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
   const link = loginPath(path);
   assert.equal(loginDestination(link.slice(link.indexOf("?"))), path);
-  for (const suffix of ["", "/roster", "/coaches", "/games"]) {
+  for (const suffix of ["", "/roster", "/roster/print", "/coaches", "/games"]) {
     const team = "/teams/11111111-2222-3333-4444-555555555555" + suffix;
     assert.equal(loginDestination(loginPath(team).slice(6)), team);
   }
+  assert.equal(loginDestination(loginPath("/players").slice(6)), "/players");
 });
 
 test("login return destinations cannot leave the supported coach routes", () => {

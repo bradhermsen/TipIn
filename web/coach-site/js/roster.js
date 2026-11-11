@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { $, esc, modal, toast, POSITIONS, positionLabel } from "./ui.js";
 import { teamHeader, wireTabs } from "./team.js";
 import { openRosterImage } from "./roster-image.js";
+import { sortRoster } from "./players.js";
 
 const positionOptions = (selected) =>
   POSITIONS.map(([v, l]) => `<option value="${v}" ${v === (selected || "") ? "selected" : ""}>${l}</option>`).join("");
@@ -19,11 +20,15 @@ export async function renderRoster(app, teamId, navigate) {
     wireTabs(app, navigate);
     return;
   }
-  roster.sort((a, b) => (a.jerseyNumber ?? 999) - (b.jerseyNumber ?? 999) || a.lastName.localeCompare(b.lastName));
+  roster.sort(sortRoster);
 
   const reload = () => renderRoster(app, teamId, navigate);
 
   app.innerHTML = `${header}
+    <div class="roster-actions">
+      <a class="action-link" href="/teams/${esc(teamId)}/roster/print" data-link>Print roster</a>
+      <a class="action-link" href="/players" data-link>View all players</a>
+    </div>
     <div class="row spread"><span class="muted">${roster.length} player${roster.length === 1 ? "" : "s"}</span>
       <button type="button" id="add">+ Add player</button></div>
     <button type="button" class="secondary block" id="import-image">Import roster from image</button>

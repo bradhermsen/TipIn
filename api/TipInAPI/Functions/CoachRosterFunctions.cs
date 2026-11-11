@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Threading.Tasks;
+using System.Threading;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using TipInAPI.Infrastructure.Authorization;
@@ -102,13 +103,18 @@ namespace TipInAPI.Functions
         [Function("CoachGetRoster")]
         public async Task<HttpResponseData> GetRoster(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "coach/teams/{teamId:guid}/roster")] HttpRequestData req,
-            Guid teamId)
+            Guid teamId, CancellationToken cancellationToken = default)
         {
             var (_, error) = await AuthorizeAsync(req, teamId);
             if (error != null) return error;
 
+            var value = req.Query["includeInactive"];
+            var includeInactive = false;
+            if (value != null && !bool.TryParse(value, out includeInactive))
+                return await AuthorizationHelper.BadRequestResponse(req, "includeInactive must be true or false.");
             var response = req.CreateResponse(HttpStatusCode.OK);
-            await response.WriteAsJsonAsync(await _service.GetRosterAsync(teamId));
+            response.Headers.Add("Cache-Control", "no-store");
+            await response.WriteAsJsonAsync(await _service.GetRosterAsync(teamId, includeInactive, cancellationToken), cancellationToken);
             return response;
         }
 

@@ -105,6 +105,30 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .player-details > div { min-width: 0; }
 .player-details input, .player-details select { min-width: 0; padding: 12px 8px; }
 .roster-preview { display: block; max-width: 100%; max-height: 240px; margin: 12px auto; object-fit: contain; }
+.roster-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0; }
+.action-link { display: inline-block; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; text-decoration: none; }
+.roster-table-wrap { overflow-x: auto; }
+.roster-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.roster-table th, .roster-table td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.print-roster-heading { display: flex; align-items: center; gap: 16px; }
+.print-roster-heading img { width: 100px; height: auto; }
+.print-roster-heading h1 { margin-bottom: 4px; }
+.print-roster-heading p { margin-top: 0; }
+
+@media print {
+  @page { margin: 15mm; }
+  html, body { background: white; color: black; padding: 0; }
+  body:has(.print-roster) .topbar,
+  body:has(.print-roster) .game-view-legal-footer,
+  body:has(.print-roster) .print-controls,
+  body:has(.print-roster) .toast { display: none !important; }
+  main:has(.print-roster) { max-width: none; padding: 0; margin: 0; }
+  .print-roster .roster-table-wrap { overflow: visible; }
+  .print-roster .roster-table { font-size: 11pt; }
+  .print-roster .roster-table th, .print-roster .roster-table td { border-color: #aaa; }
+  .print-roster thead { display: table-header-group; }
+  .print-roster tr, .print-roster-heading { break-inside: avoid; }
+}
 .import-player { margin-top: 12px; }
 .import-player p { overflow-wrap: anywhere; }
 

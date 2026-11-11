@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using Dapper;
 using TipInAPI.DTOs;
 using TipInAPI.Infrastructure.Database;
@@ -19,6 +20,7 @@ namespace TipInAPI.Services
         public int? JerseyNumber { get; set; }
         public string? Position { get; set; }
         public bool IsGoalie { get; set; }
+        public bool IsRosterActive { get; set; }
     }
 
     public sealed class PlayerSearchMatch
@@ -71,7 +73,7 @@ namespace TipInAPI.Services
     {
         Task<CoachRosterResult> GetStaffAsync(Guid teamId);
         Task<CoachRosterResult> UpdateAssistantAsync(Guid teamId, int slot, UpdateAssistantRequest request);
-        Task<IEnumerable<CoachRosterPlayer>> GetRosterAsync(Guid teamId);
+        Task<IEnumerable<CoachRosterPlayer>> GetRosterAsync(Guid teamId, bool includeInactive = false, CancellationToken cancellationToken = default);
         Task<CoachRosterResult> SearchPlayersAsync(Guid teamId, string query);
         Task<CoachRosterResult> AddPlayerAsync(Guid actorId, Guid teamId, AddRosterPlayerRequest request);
         Task<CoachRosterResult> UpdatePlayerAsync(Guid actorId, Guid teamId, Guid rosterEntryId, UpdateRosterPlayerRequest request);
@@ -154,17 +156,18 @@ namespace TipInAPI.Services
             return null;
         }
 
-        public async Task<IEnumerable<CoachRosterPlayer>> GetRosterAsync(Guid teamId)
+        public async Task<IEnumerable<CoachRosterPlayer>> GetRosterAsync(Guid teamId, bool includeInactive = false, CancellationToken cancellationToken = default)
         {
             using var conn = _db.CreateConnection();
-            return await conn.QueryAsync<CoachRosterPlayer>(@"
+            return await conn.QueryAsync<CoachRosterPlayer>(new CommandDefinition(@"
                 SELECT r.Id AS RosterEntryId, p.PlayerId, p.FirstName, p.LastName, p.Grade,
-                       r.JerseyNumber, r.Position, ISNULL(r.IsGoalie, 0) AS IsGoalie
+                       r.JerseyNumber, r.Position, ISNULL(r.IsGoalie, 0) AS IsGoalie,
+                       CAST(CASE WHEN r.RemovedAtUtc IS NULL AND p.IsActive=1 THEN 1 ELSE 0 END AS bit) AS IsRosterActive
                 FROM RosterEntries r
                 JOIN Players p ON p.PlayerId = r.PlayerId
-                WHERE r.TeamId = @TeamId AND r.RemovedAtUtc IS NULL
+                WHERE r.TeamId = @TeamId AND (@IncludeInactive=1 OR r.RemovedAtUtc IS NULL)
                 ORDER BY r.JerseyNumber, p.LastName, p.FirstName",
-                new { TeamId = teamId });
+                new { TeamId = teamId, IncludeInactive = includeInactive }, cancellationToken: cancellationToken));
         }
 
         // Search is limited to the team's own organization and returns minimal fields
