@@ -27,6 +27,7 @@ async function initSettingsPage() {
   wireSettingsEvents();
   const loads = [];
   if (document.getElementById("smtp-host")) loads.push(loadEmailSettings());
+  if (document.getElementById("coach-email-log")) loads.push(initCoachEmailLog());
   if (document.getElementById("settings-leagues-list")) loads.push(loadLeagueCatalog());
   if (document.getElementById("settings-game-types-list")) loads.push(loadGameTypeCatalog());
   if (document.getElementById("settings-levels-list")) loads.push(loadLevelCatalog());
@@ -710,6 +711,79 @@ async function loadCoachEmailAutomation() {
     console.error("Failed to load coach email automation", error);
     status.textContent = error.message || "Failed to load automation settings. Reload to try again.";
   }
+}
+
+async function initCoachEmailLog() {
+  const section = document.getElementById("coach-email-log");
+  if (!section || !Auth.hasRole(window.ROLES.SuperAdmin)) return;
+  section.hidden = false;
+  const dateInput = document.getElementById("email-log-date");
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  dateInput.value = ["year", "month", "day"]
+    .map((type) => parts.find((part) => part.type === type).value).join("-");
+  let page = 1;
+  let requestId = 0;
+  const refresh = document.getElementById("email-log-refresh");
+  const previous = document.getElementById("email-log-previous");
+  const next = document.getElementById("email-log-next");
+  const rows = document.getElementById("email-log-rows");
+  const status = document.getElementById("email-log-status");
+  const pageLabel = document.getElementById("email-log-page");
+  async function load(targetPage = 1) {
+    const id = ++requestId;
+    rows.innerHTML = "";
+    pageLabel.textContent = "";
+    previous.disabled = next.disabled = refresh.disabled = true;
+    status.classList.remove("is-error");
+    if (!dateInput.value || !dateInput.checkValidity()) {
+      status.textContent = "Select a valid date.";
+      status.classList.add("is-error");
+      refresh.disabled = false;
+      return;
+    }
+    status.textContent = "Loading automated email log...";
+    try {
+      const result = await EmailSettingsApi.getAutomationLog(dateInput.value, targetPage);
+      if (id !== requestId) return;
+      page = result.page;
+      rows.innerHTML = result.items.map(renderCoachEmailLogRow).join("");
+      pageLabel.textContent = `Page ${page}`;
+      previous.disabled = page <= 1;
+      next.disabled = !result.hasMore;
+      status.textContent = result.items.length ? "" : "No automated email tracking entries for this date.";
+    } catch (error) {
+      if (id !== requestId) return;
+      console.error("Failed to load automated email log", error);
+      status.textContent = error.message || "Failed to load automated email log.";
+      status.classList.add("is-error");
+    } finally {
+      if (id === requestId) refresh.disabled = false;
+    }
+  }
+  dateInput.onchange = () => load();
+  refresh.onclick = () => load();
+  previous.onclick = () => load(page - 1);
+  next.onclick = () => load(page + 1);
+  await load();
+}
+
+function renderCoachEmailLogRow(entry) {
+  const time = (value) => value ? new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit", second: "2-digit", timeZoneName: "short",
+  }).format(new Date(value)) : "-";
+  const types = { Invitation: "Invitation", RosterReview: "Roster review", LineupReminder: "Lineup reminder" };
+  const statuses = { Sent: "Sent", Sending: "Sending / unconfirmed", NeedsReview: "Needs review (delivery uncertain)" };
+  // GameDateTime is an arena-local wall time, unlike the UTC delivery timestamps.
+  const game = `${entry.awayTeamName || "Deleted team"} at ${entry.homeTeamName || "Deleted team"}`
+    + (entry.gameDateTime ? ` (${entry.gameDateTime.replace("T", " ").slice(0, 16)})` : "");
+  return `<tr>${[
+    time(entry.claimedAtUtc), time(entry.sentAtUtc), entry.email,
+    entry.teamName || entry.teamId, game,
+    types[entry.reminderType] || entry.reminderType, statuses[entry.status] || entry.status,
+  ].map((value) => `<td>${escapeHtml(value)}</td>`).join("")}</tr>`;
 }
 
 function applyAutomationSettings(settings) {

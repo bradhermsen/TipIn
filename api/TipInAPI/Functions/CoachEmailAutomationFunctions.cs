@@ -1,4 +1,6 @@
 using System.Net;
+using System;
+using System.Globalization;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,9 +17,11 @@ namespace TipInAPI.Functions
         private readonly IAuthorizationService _auth;
         private readonly ICoachEmailAutomationSettingsService _settings;
         private readonly IConfiguration _config;
-        public CoachEmailAutomationFunctions(IAuthorizationService auth, ICoachEmailAutomationSettingsService settings, IConfiguration config)
+        private readonly ICoachEmailLogService _log;
+        public CoachEmailAutomationFunctions(IAuthorizationService auth, ICoachEmailAutomationSettingsService settings, IConfiguration config,
+            ICoachEmailLogService log)
         {
-            _auth = auth; _settings = settings; _config = config;
+            _auth = auth; _settings = settings; _config = config; _log = log;
         }
 
         private async Task<HttpResponseData?> AuthorizeAsync(HttpRequestData req)
@@ -66,6 +70,30 @@ namespace TipInAPI.Functions
             if (settings == null) return await AuthorizationHelper.BadRequestResponse(req, "Automation settings are required.");
             await _settings.SaveAsync(settings, cancellationToken);
             return await Get(req, cancellationToken);
+        }
+
+        [Function("GetCoachEmailLog")]
+        public async Task<HttpResponseData> GetLog(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "email/automation/log")] HttpRequestData req,
+            CancellationToken cancellationToken)
+        {
+            var denied = await AuthorizeAsync(req);
+            if (denied != null) return denied;
+            var dateText = req.Query["date"];
+            var date = DateOnly.FromDateTime(CoachReminderSchedule.LocalNow(DateTime.UtcNow));
+            if (dateText != null && (!DateOnly.TryParseExact(dateText, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out date) || date.Year < 2000 || date.Year > 9998))
+                return await AuthorizationHelper.BadRequestResponse(req, "Date must be yyyy-MM-dd between 2000 and 9998 (Central Time).");
+            var pageText = req.Query["page"];
+            var page = 1;
+            if (pageText != null && (!int.TryParse(pageText, NumberStyles.None, CultureInfo.InvariantCulture, out page)
+                || page < 1 || page > 10000))
+                return await AuthorizationHelper.BadRequestResponse(req, "Page must be between 1 and 10000.");
+            var result = await _log.GetAsync(date, page, cancellationToken);
+            var response = req.CreateResponse(HttpStatusCode.OK);
+            response.Headers.Add("Cache-Control", "no-store");
+            await response.WriteAsJsonAsync(result, cancellationToken);
+            return response;
         }
     }
 }
