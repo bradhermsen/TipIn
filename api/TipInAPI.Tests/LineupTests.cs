@@ -69,6 +69,7 @@ namespace TipInAPI.Tests
             var mine = Assert.Single(games);
             Assert.Equal(_gameId, mine.GameId);
             Assert.True(mine.IsHome);
+            Assert.True(mine.IsManaged);
             Assert.False(mine.Locked);
             Assert.True(mine.NeedsLineup);
             Assert.False(string.IsNullOrEmpty(mine.OpponentName));
@@ -245,6 +246,42 @@ namespace TipInAPI.Tests
         {
             var result = await _lineups.GetAsync(_gameId, _db.VisitorTeamId);
             Assert.Equal(CoachRosterOutcome.NotFound, result.Outcome);
+        }
+
+        [Fact]
+        public async Task ExternalTeamGames_DoNotNeedLineups_AndCannotReadSaveSignOrUnlockThem()
+        {
+            var externalGame = _db.AddGame(_db.HostTeamId, _db.VisitorTeamId, 0, "Scheduled");
+            var game = Assert.Single(await _lineups.ListGamesForTeamAsync(_db.VisitorTeamId),
+                item => item.GameId == externalGame);
+            Assert.False(game.IsManaged);
+            Assert.False(game.NeedsLineup);
+
+            var read = await _lineups.GetAsync(externalGame, _db.VisitorTeamId);
+            var save = await _lineups.SaveAsync(externalGame, _db.VisitorTeamId, _coach, new SaveLineupRequest());
+            var sign = await _lineups.SignAsync(externalGame, _db.VisitorTeamId, _coach,
+                new SignLineupRequest { SignerName = "Coach T" });
+            var unlock = await _lineups.UnlockAsync(externalGame, _db.VisitorTeamId, Guid.NewGuid(), "test");
+            Assert.All(new[] { read, save, sign, unlock },
+                result => Assert.Equal(CoachRosterOutcome.Forbidden, result.Outcome));
+
+            Assert.Empty(await _lineups.GetLockedStartersAsync(externalGame));
+        }
+
+        [Fact]
+        public async Task PreviouslySignedLineup_IsIgnoredIfItsTeamBecomesExternal()
+        {
+            SetLevel("Varsity");
+            BuildRoster(7);
+            await Save(0, _players, _players.Take(6));
+            Assert.Equal(CoachRosterOutcome.Ok, (await Sign(1)).Outcome);
+            Assert.Single(await _lineups.GetLockedStartersAsync(_gameId));
+
+            using (var conn = _db.Factory.CreateConnection())
+                conn.Execute("UPDATE Organizations SET OrganizationType='External' WHERE OrganizationId=@org; UPDATE Teams SET IsExternal=1 WHERE Id=@team;",
+                    new { org = _db.HostOrgId, team = _db.HostTeamId });
+
+            Assert.Empty(await _lineups.GetLockedStartersAsync(_gameId));
         }
     }
 }

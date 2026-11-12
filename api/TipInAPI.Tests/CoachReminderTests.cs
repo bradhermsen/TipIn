@@ -182,6 +182,30 @@ namespace TipInAPI.Tests
         }
 
         [Fact]
+        public async Task ExternalTeamsReceiveAccessInvitationsButNotGameDayRosterOrLineupReminders()
+        {
+            using var s = new Scenario();
+            var externalEmail = s.Db.NewEmail("external");
+            using (var conn = s.Db.Factory.CreateConnection())
+                conn.Execute("UPDATE Teams SET HeadCoachEmail=@email WHERE Id=@team",
+                    new { email = externalEmail, team = s.Db.VisitorTeamId });
+
+            var invitation = Assert.Single(await s.Service().PreviewAsync(s.Now));
+            Assert.Equal(s.Db.VisitorTeamId, invitation.TeamId);
+            Assert.True(invitation.InvitationOnly);
+            Assert.Equal("Invitation", invitation.ReminderType);
+            Assert.Equal(1, await s.Service().RunAsync(s.Now));
+            Assert.Equal(externalEmail.ToLowerInvariant(), Assert.Single(s.Mail.Sent).To.Single());
+
+            var coach = s.Db.AddCoach(s.Db.VisitorTeamId);
+            var assignedEmail = s.Db.Scalar<string>("SELECT Email FROM AuthUsers WHERE Id=@coach", new { coach });
+            using (var conn = s.Db.Factory.CreateConnection())
+                conn.Execute("UPDATE Teams SET HeadCoachEmail=@email WHERE Id=@team",
+                    new { email = assignedEmail, team = s.Db.VisitorTeamId });
+            Assert.Empty(await s.Service().PreviewAsync(Utc("2038-11-10 08:00")));
+        }
+
+        [Fact]
         public async Task AssignedAccounts_GetDirectLinks_AndBothStagesAreDeduplicated()
         {
             using var s = new Scenario();

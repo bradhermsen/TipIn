@@ -55,7 +55,7 @@ namespace TipInAPI.Services
         public bool Confirm { get; set; }
     }
 
-    public enum CoachRosterOutcome { Ok, NotFound, Invalid, Warning }
+    public enum CoachRosterOutcome { Ok, NotFound, Forbidden, Invalid, Warning }
 
     public sealed class CoachRosterResult
     {
@@ -65,6 +65,7 @@ namespace TipInAPI.Services
 
         public static CoachRosterResult Ok(object? data = null) => new() { Outcome = CoachRosterOutcome.Ok, Data = data };
         public static CoachRosterResult NotFound(string message) => new() { Outcome = CoachRosterOutcome.NotFound, Message = message };
+        public static CoachRosterResult Forbidden(string message) => new() { Outcome = CoachRosterOutcome.Forbidden, Message = message };
         public static CoachRosterResult Invalid(string message) => new() { Outcome = CoachRosterOutcome.Invalid, Message = message };
         public static CoachRosterResult Warning(string message, object data) => new() { Outcome = CoachRosterOutcome.Warning, Message = message, Data = data };
     }

@@ -88,6 +88,10 @@ namespace TipInAPI.Functions
                     response.StatusCode = HttpStatusCode.NotFound;
                     await response.WriteAsJsonAsync(new { error = result.Message }, HttpStatusCode.NotFound);
                     break;
+                case CoachRosterOutcome.Forbidden:
+                    response.StatusCode = HttpStatusCode.Forbidden;
+                    await response.WriteAsJsonAsync(new { error = result.Message }, HttpStatusCode.Forbidden);
+                    break;
                 case CoachRosterOutcome.Warning:
                     response.StatusCode = HttpStatusCode.Conflict;
                     await response.WriteAsJsonAsync(new { error = result.Message, details = result.Data }, HttpStatusCode.Conflict);

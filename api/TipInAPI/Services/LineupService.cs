@@ -74,9 +74,10 @@ namespace TipInAPI.Services
         public string? OpponentLevelName { get; set; }
         public string? OpponentTeamType { get; set; }
         public string OpponentDisplayName => Infrastructure.TeamNameFormatter.Format(OpponentName, OpponentLevelName, OpponentTeamType);
+        public bool IsManaged { get; set; }
         public bool Locked { get; set; }
         // The coach site applies its browser-local date cutoff to eligible games.
-        public bool NeedsLineup => !Locked
+        public bool NeedsLineup => IsManaged && !Locked
             && !new[] { "final", "completed", "closed", "cancelled", "canceled", "postponed" }
                 .Contains((Status ?? "").Trim().ToLowerInvariant());
     }
@@ -121,6 +122,7 @@ namespace TipInAPI.Services
             public Guid AwayTeamId { get; set; }
             public string? Status { get; set; }
             public string? LevelName { get; set; }
+            public bool IsManaged { get; set; }
         }
 
         private sealed class LineupRow
@@ -166,9 +168,11 @@ namespace TipInAPI.Services
         private static async Task<GameRow?> LoadGameAsync(IDbConnection conn, IDbTransaction? tx, Guid gameId, Guid teamId)
         {
             return await conn.QueryFirstOrDefaultAsync<GameRow>(@"
-                SELECT g.HomeTeamId, g.AwayTeamId, g.Status, l.Name AS LevelName
+                SELECT g.HomeTeamId, g.AwayTeamId, g.Status, l.Name AS LevelName,
+                    CAST(CASE WHEN o.OrganizationType='Managed' AND ISNULL(t.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsManaged
                 FROM dbo.Games g
                 INNER JOIN dbo.Teams t ON t.Id = @TeamId
+                INNER JOIN dbo.Organizations o ON o.OrganizationId=t.OrganizationId
                 LEFT JOIN dbo.Levels l ON l.Id = t.LevelId
                 WHERE g.GameId = @GameId AND @TeamId IN (g.HomeTeamId, g.AwayTeamId);",
                 new { GameId = gameId, TeamId = teamId }, tx);
@@ -237,6 +241,7 @@ namespace TipInAPI.Services
             using var conn = _db.CreateConnection();
             var game = await LoadGameAsync(conn, null, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
+            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
 
             var row = await conn.QueryFirstOrDefaultAsync<LineupRow>(
                 "SELECT ParticipantIdsJson, StarterIdsJson, Version FROM dbo.GameLineups WHERE GameId = @GameId AND TeamId = @TeamId;",
@@ -255,6 +260,7 @@ namespace TipInAPI.Services
 
             var game = await LoadGameAsync(conn, tx, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
+            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
 
             var error = Validate(game.LevelName, participants, starters, await LoadRosterAsync(conn, tx, teamId));
             if (error != null) return CoachRosterResult.Invalid(error);
@@ -335,6 +341,7 @@ namespace TipInAPI.Services
 
             var game = await LoadGameAsync(conn, tx, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
+            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
 
             var current = await conn.QueryFirstOrDefaultAsync<LineupRow>(
                 "SELECT ParticipantIdsJson, StarterIdsJson, Version FROM dbo.GameLineups WITH (UPDLOCK, HOLDLOCK) WHERE GameId = @GameId AND TeamId = @TeamId;",
@@ -390,6 +397,7 @@ namespace TipInAPI.Services
 
             var game = await LoadGameAsync(conn, tx, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
+            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
 
             var current = await conn.QueryFirstOrDefaultAsync<LineupRow>(
                 "SELECT ParticipantIdsJson, StarterIdsJson, Version FROM dbo.GameLineups WITH (UPDLOCK, HOLDLOCK) WHERE GameId = @GameId AND TeamId = @TeamId;",
@@ -413,13 +421,17 @@ namespace TipInAPI.Services
             var rows = await conn.QueryAsync<(Guid TeamId, string StarterIdsJson)>(@"
                 SELECT l.TeamId, l.StarterIdsJson
                 FROM dbo.GameLineups l
+                INNER JOIN dbo.Games g ON g.GameId=l.GameId
+                INNER JOIN dbo.Teams t ON t.Id=l.TeamId
+                INNER JOIN dbo.Organizations o ON o.OrganizationId=t.OrganizationId
                 CROSS APPLY (
                     SELECT TOP 1 e.EventType
                     FROM dbo.GameLineupEvents e
                     WHERE e.GameId = l.GameId AND e.TeamId = l.TeamId
                     ORDER BY e.CreatedAtUtc DESC, e.EventId DESC
                 ) latest
-                WHERE l.GameId = @GameId AND latest.EventType = 'Sign';", new { GameId = gameId });
+                WHERE l.GameId = @GameId AND latest.EventType = 'Sign'
+                    AND o.OrganizationType='Managed' AND ISNULL(t.IsExternal,0)=0;", new { GameId = gameId });
             return rows.ToDictionary(r => r.TeamId, r => ParseIds(r.StarterIdsJson));
         }
 
@@ -428,6 +440,7 @@ namespace TipInAPI.Services
             using var conn = _db.CreateConnection();
             return (await conn.QueryAsync<CoachGameItem>(@"
                 SELECT g.GameId, g.GameDateTime, g.Status,
+                       CAST(CASE WHEN org.OrganizationType='Managed' AND ISNULL(t.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsManaged,
                        CASE WHEN g.HomeTeamId = @TeamId THEN 1 ELSE 0 END AS IsHome,
                        opp.Name AS OpponentName,
                        ol.Name AS OpponentLevelName, opp.TeamType AS OpponentTeamType,
@@ -435,6 +448,8 @@ namespace TipInAPI.Services
                                   WHERE e.GameId = g.GameId AND e.TeamId = @TeamId
                                   ORDER BY e.CreatedAtUtc DESC, e.EventId DESC) = 'Sign' THEN 1 ELSE 0 END AS Locked
                 FROM dbo.Games g
+                INNER JOIN dbo.Teams t ON t.Id=@TeamId
+                INNER JOIN dbo.Organizations org ON org.OrganizationId=t.OrganizationId
                 INNER JOIN dbo.Teams opp ON opp.Id = CASE WHEN g.HomeTeamId = @TeamId THEN g.AwayTeamId ELSE g.HomeTeamId END
                 LEFT JOIN dbo.Levels ol ON ol.Id = opp.LevelId
                 WHERE @TeamId IN (g.HomeTeamId, g.AwayTeamId)
