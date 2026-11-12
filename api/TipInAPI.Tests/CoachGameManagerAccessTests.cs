@@ -15,6 +15,7 @@ namespace TipInAPI.Tests
         [InlineData("assistant", "GM-ABC123", null)]
         [InlineData("away", "GM-ABC123", null)]
         [InlineData("external", "GM-ABC123", null)]
+        [InlineData("team-external", "GM-ABC123", null)]
         [InlineData("disabled", "GM-ABC123", null)]
         [InlineData("removed", "GM-ABC123", null)]
         [InlineData("viewer", "GM-ABC123", null)]
@@ -36,6 +37,7 @@ namespace TipInAPI.Tests
             if (scenario == "removed") conn.Execute("DELETE FROM dbo.CoachTeams WHERE UserId=@coach", new { coach });
             if (scenario == "viewer") conn.Execute("UPDATE dbo.AuthUsers SET Role='Viewer' WHERE Id=@coach", new { coach });
             if (scenario == "external") conn.Execute("UPDATE dbo.Organizations SET OrganizationType='External' WHERE OrganizationId=@o", new { o = db.HostOrgId });
+            if (scenario == "team-external") conn.Execute("UPDATE dbo.Teams SET IsExternal=1 WHERE Id=@t", new { t = db.HostTeamId });
             var response = await new LineupService(db.Factory).GetGameManagerAccessAsync(
                 scenario == "different-game" ? Guid.NewGuid() : game,
                 scenario == "away" ? db.VisitorTeamId : db.HostTeamId, coach);

@@ -42,7 +42,7 @@ export function formatGameTime(iso) {
 }
 
 export function needsLineup(game, now = new Date()) {
-  if (!game.isManaged) return false;
+  if (!game.isTipInManaged) return false;
   const date = new Date(game.gameDateTime);
   if (Number.isNaN(date.getTime())) throw new Error("Cannot check lineup reminder: invalid game date.");
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());

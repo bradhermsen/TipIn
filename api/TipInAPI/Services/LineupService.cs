@@ -59,6 +59,7 @@ namespace TipInAPI.Services
         Task<Dictionary<Guid, List<Guid>>> GetLockedStartersAsync(Guid gameId);
         Task<(Guid HomeTeamId, Guid AwayTeamId)?> GetGameTeamsAsync(Guid gameId);
         Task<IEnumerable<CoachGameItem>> ListGamesForTeamAsync(Guid teamId);
+        Task<bool> IsTipInManagedGameAsync(Guid gameId);
     }
 
     /// <summary>Private access code available only to the assigned home head coach of a managed game.</summary>
@@ -74,10 +75,10 @@ namespace TipInAPI.Services
         public string? OpponentLevelName { get; set; }
         public string? OpponentTeamType { get; set; }
         public string OpponentDisplayName => Infrastructure.TeamNameFormatter.Format(OpponentName, OpponentLevelName, OpponentTeamType);
-        public bool IsManaged { get; set; }
+        public bool IsTipInManaged { get; set; }
         public bool Locked { get; set; }
         // The coach site applies its browser-local date cutoff to eligible games.
-        public bool NeedsLineup => IsManaged && !Locked
+        public bool NeedsLineup => IsTipInManaged && !Locked
             && !new[] { "final", "completed", "closed", "cancelled", "canceled", "postponed" }
                 .Contains((Status ?? "").Trim().ToLowerInvariant());
     }
@@ -101,6 +102,7 @@ namespace TipInAPI.Services
                 JOIN dbo.Organizations o ON o.OrganizationId=t.OrganizationId
                 JOIN dbo.AuthUsers a ON a.Id=@actorId
                 WHERE g.GameId=@gameId AND t.Id=@teamId AND t.IsActive=1 AND o.OrganizationType='Managed'
+                    AND ISNULL(t.IsExternal,0)=0
                     AND a.IsActive=1 AND LOWER(LTRIM(RTRIM(a.Email)))=LOWER(LTRIM(RTRIM(t.HeadCoachEmail)))
                     AND (a.Role='SuperAdmin'
                         OR (a.Role='OrgAdmin' AND EXISTS (SELECT 1 FROM dbo.Users u
@@ -122,7 +124,7 @@ namespace TipInAPI.Services
             public Guid AwayTeamId { get; set; }
             public string? Status { get; set; }
             public string? LevelName { get; set; }
-            public bool IsManaged { get; set; }
+            public bool IsTipInManaged { get; set; }
         }
 
         private sealed class LineupRow
@@ -169,10 +171,11 @@ namespace TipInAPI.Services
         {
             return await conn.QueryFirstOrDefaultAsync<GameRow>(@"
                 SELECT g.HomeTeamId, g.AwayTeamId, g.Status, l.Name AS LevelName,
-                    CAST(CASE WHEN o.OrganizationType='Managed' AND ISNULL(t.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsManaged
+                    CAST(CASE WHEN homeOrg.OrganizationType='Managed' AND ISNULL(homeTeam.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsTipInManaged
                 FROM dbo.Games g
                 INNER JOIN dbo.Teams t ON t.Id = @TeamId
-                INNER JOIN dbo.Organizations o ON o.OrganizationId=t.OrganizationId
+                INNER JOIN dbo.Teams homeTeam ON homeTeam.Id=g.HomeTeamId
+                INNER JOIN dbo.Organizations homeOrg ON homeOrg.OrganizationId=homeTeam.OrganizationId
                 LEFT JOIN dbo.Levels l ON l.Id = t.LevelId
                 WHERE g.GameId = @GameId AND @TeamId IN (g.HomeTeamId, g.AwayTeamId);",
                 new { GameId = gameId, TeamId = teamId }, tx);
@@ -241,7 +244,7 @@ namespace TipInAPI.Services
             using var conn = _db.CreateConnection();
             var game = await LoadGameAsync(conn, null, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
-            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
+            if (!game.IsTipInManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed games.");
 
             var row = await conn.QueryFirstOrDefaultAsync<LineupRow>(
                 "SELECT ParticipantIdsJson, StarterIdsJson, Version FROM dbo.GameLineups WHERE GameId = @GameId AND TeamId = @TeamId;",
@@ -260,7 +263,7 @@ namespace TipInAPI.Services
 
             var game = await LoadGameAsync(conn, tx, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
-            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
+            if (!game.IsTipInManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed games.");
 
             var error = Validate(game.LevelName, participants, starters, await LoadRosterAsync(conn, tx, teamId));
             if (error != null) return CoachRosterResult.Invalid(error);
@@ -341,7 +344,7 @@ namespace TipInAPI.Services
 
             var game = await LoadGameAsync(conn, tx, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
-            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
+            if (!game.IsTipInManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed games.");
 
             var current = await conn.QueryFirstOrDefaultAsync<LineupRow>(
                 "SELECT ParticipantIdsJson, StarterIdsJson, Version FROM dbo.GameLineups WITH (UPDLOCK, HOLDLOCK) WHERE GameId = @GameId AND TeamId = @TeamId;",
@@ -397,7 +400,7 @@ namespace TipInAPI.Services
 
             var game = await LoadGameAsync(conn, tx, gameId, teamId);
             if (game == null) return CoachRosterResult.NotFound("Game or team not found.");
-            if (!game.IsManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed teams.");
+            if (!game.IsTipInManaged) return CoachRosterResult.Forbidden("Lineups are only available for TipIn-managed games.");
 
             var current = await conn.QueryFirstOrDefaultAsync<LineupRow>(
                 "SELECT ParticipantIdsJson, StarterIdsJson, Version FROM dbo.GameLineups WITH (UPDLOCK, HOLDLOCK) WHERE GameId = @GameId AND TeamId = @TeamId;",
@@ -422,8 +425,8 @@ namespace TipInAPI.Services
                 SELECT l.TeamId, l.StarterIdsJson
                 FROM dbo.GameLineups l
                 INNER JOIN dbo.Games g ON g.GameId=l.GameId
-                INNER JOIN dbo.Teams t ON t.Id=l.TeamId
-                INNER JOIN dbo.Organizations o ON o.OrganizationId=t.OrganizationId
+                INNER JOIN dbo.Teams homeTeam ON homeTeam.Id=g.HomeTeamId
+                INNER JOIN dbo.Organizations homeOrg ON homeOrg.OrganizationId=homeTeam.OrganizationId
                 CROSS APPLY (
                     SELECT TOP 1 e.EventType
                     FROM dbo.GameLineupEvents e
@@ -431,7 +434,7 @@ namespace TipInAPI.Services
                     ORDER BY e.CreatedAtUtc DESC, e.EventId DESC
                 ) latest
                 WHERE l.GameId = @GameId AND latest.EventType = 'Sign'
-                    AND o.OrganizationType='Managed' AND ISNULL(t.IsExternal,0)=0;", new { GameId = gameId });
+                    AND homeOrg.OrganizationType='Managed' AND ISNULL(homeTeam.IsExternal,0)=0;", new { GameId = gameId });
             return rows.ToDictionary(r => r.TeamId, r => ParseIds(r.StarterIdsJson));
         }
 
@@ -440,7 +443,7 @@ namespace TipInAPI.Services
             using var conn = _db.CreateConnection();
             return (await conn.QueryAsync<CoachGameItem>(@"
                 SELECT g.GameId, g.GameDateTime, g.Status,
-                       CAST(CASE WHEN org.OrganizationType='Managed' AND ISNULL(t.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsManaged,
+                       CAST(CASE WHEN homeOrg.OrganizationType='Managed' AND ISNULL(homeTeam.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsTipInManaged,
                        CASE WHEN g.HomeTeamId = @TeamId THEN 1 ELSE 0 END AS IsHome,
                        opp.Name AS OpponentName,
                        ol.Name AS OpponentLevelName, opp.TeamType AS OpponentTeamType,
@@ -449,7 +452,8 @@ namespace TipInAPI.Services
                                   ORDER BY e.CreatedAtUtc DESC, e.EventId DESC) = 'Sign' THEN 1 ELSE 0 END AS Locked
                 FROM dbo.Games g
                 INNER JOIN dbo.Teams t ON t.Id=@TeamId
-                INNER JOIN dbo.Organizations org ON org.OrganizationId=t.OrganizationId
+                INNER JOIN dbo.Teams homeTeam ON homeTeam.Id=g.HomeTeamId
+                INNER JOIN dbo.Organizations homeOrg ON homeOrg.OrganizationId=homeTeam.OrganizationId
                 INNER JOIN dbo.Teams opp ON opp.Id = CASE WHEN g.HomeTeamId = @TeamId THEN g.AwayTeamId ELSE g.HomeTeamId END
                 LEFT JOIN dbo.Levels ol ON ol.Id = opp.LevelId
                 WHERE @TeamId IN (g.HomeTeamId, g.AwayTeamId)
@@ -466,6 +470,20 @@ namespace TipInAPI.Services
             var g = await conn.QueryFirstOrDefaultAsync<GameRow>(
                 "SELECT HomeTeamId, AwayTeamId FROM dbo.Games WHERE GameId = @GameId;", new { GameId = gameId });
             return g == null ? null : (g.HomeTeamId, g.AwayTeamId);
+        }
+
+        public async Task<bool> IsTipInManagedGameAsync(Guid gameId)
+        {
+            using var conn = _db.CreateConnection();
+            return await conn.ExecuteScalarAsync<bool>(@"
+                SELECT CAST(CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM dbo.Games g
+                    INNER JOIN dbo.Teams homeTeam ON homeTeam.Id=g.HomeTeamId
+                    INNER JOIN dbo.Organizations homeOrg ON homeOrg.OrganizationId=homeTeam.OrganizationId
+                    WHERE g.GameId=@GameId AND homeOrg.OrganizationType='Managed'
+                        AND ISNULL(homeTeam.IsExternal,0)=0
+                ) THEN 1 ELSE 0 END AS bit);", new { GameId = gameId });
         }
     }
 }

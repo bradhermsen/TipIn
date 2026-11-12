@@ -49,8 +49,17 @@ namespace TipInAPI.Tests
                 ExpectedVersion = expected, ParticipantIds = participants.ToList(), StarterIds = starters.ToList()
             });
 
+        private Task<CoachRosterResult> SaveForTeam(Guid gameId, Guid teamId, int expected, IEnumerable<Guid> participants, IEnumerable<Guid> starters) =>
+            _lineups.SaveAsync(gameId, teamId, _coach, new SaveLineupRequest
+            {
+                ExpectedVersion = expected, ParticipantIds = participants.ToList(), StarterIds = starters.ToList()
+            });
+
         private Task<CoachRosterResult> Sign(int version) =>
             _lineups.SignAsync(_gameId, _db.HostTeamId, _coach, new SignLineupRequest { ExpectedVersion = version, SignerName = "Coach T" });
+
+        private Task<CoachRosterResult> SignForTeam(Guid gameId, Guid teamId, int version) =>
+            _lineups.SignAsync(gameId, teamId, _coach, new SignLineupRequest { ExpectedVersion = version, SignerName = "Coach T" });
 
         [Fact]
         public async Task ListGamesForTeam_ReturnsUpcomingGames_WithOpponentAndLockState()
@@ -69,7 +78,7 @@ namespace TipInAPI.Tests
             var mine = Assert.Single(games);
             Assert.Equal(_gameId, mine.GameId);
             Assert.True(mine.IsHome);
-            Assert.True(mine.IsManaged);
+            Assert.True(mine.IsTipInManaged);
             Assert.False(mine.Locked);
             Assert.True(mine.NeedsLineup);
             Assert.False(string.IsNullOrEmpty(mine.OpponentName));
@@ -249,23 +258,60 @@ namespace TipInAPI.Tests
         }
 
         [Fact]
-        public async Task ExternalTeamGames_DoNotNeedLineups_AndCannotReadSaveSignOrUnlockThem()
+        public async Task ManagedHomeGame_RequiresLineupsForBothTeamsIncludingExternalVisitor()
         {
-            var externalGame = _db.AddGame(_db.HostTeamId, _db.VisitorTeamId, 0, "Scheduled");
-            var game = Assert.Single(await _lineups.ListGamesForTeamAsync(_db.VisitorTeamId),
-                item => item.GameId == externalGame);
-            Assert.False(game.IsManaged);
-            Assert.False(game.NeedsLineup);
+            var managedGame = _db.AddGame(_db.HostTeamId, _db.VisitorTeamId, 0, "Scheduled");
+            var visitorGame = Assert.Single(await _lineups.ListGamesForTeamAsync(_db.VisitorTeamId),
+                item => item.GameId == managedGame);
+            Assert.False(visitorGame.IsHome);
+            Assert.True(visitorGame.IsTipInManaged);
+            Assert.True(visitorGame.NeedsLineup);
+            Assert.Equal(CoachRosterOutcome.Ok, (await _lineups.GetAsync(managedGame, _db.VisitorTeamId)).Outcome);
 
-            var read = await _lineups.GetAsync(externalGame, _db.VisitorTeamId);
-            var save = await _lineups.SaveAsync(externalGame, _db.VisitorTeamId, _coach, new SaveLineupRequest());
-            var sign = await _lineups.SignAsync(externalGame, _db.VisitorTeamId, _coach,
-                new SignLineupRequest { SignerName = "Coach T" });
-            var unlock = await _lineups.UnlockAsync(externalGame, _db.VisitorTeamId, Guid.NewGuid(), "test");
-            Assert.All(new[] { read, save, sign, unlock },
-                result => Assert.Equal(CoachRosterOutcome.Forbidden, result.Outcome));
+            using (var conn = _db.Factory.CreateConnection())
+            {
+                conn.Execute("UPDATE Teams SET LevelId=(SELECT Id FROM Levels WHERE Name='JV') WHERE Id=@team",
+                    new { team = _db.VisitorTeamId });
+                conn.Execute("UPDATE RosterEntries SET Position='G' WHERE TeamId=@team AND PlayerId=@player",
+                    new
+                    {
+                        team = _db.VisitorTeamId,
+                        player = _db.AddPlayer(_db.VisitorOrgId, "Away", "Goalie", 1, _db.VisitorTeamId)
+                    });
+            }
 
-            Assert.Empty(await _lineups.GetLockedStartersAsync(externalGame));
+            var goalie = _db.Scalar<Guid>("SELECT TOP 1 PlayerId FROM RosterEntries WHERE TeamId=@team",
+                new { team = _db.VisitorTeamId });
+            Assert.Equal(CoachRosterOutcome.Ok,
+                (await SaveForTeam(managedGame, _db.VisitorTeamId, 0, new[] { goalie }, new[] { goalie })).Outcome);
+            Assert.Equal(CoachRosterOutcome.Ok, (await SignForTeam(managedGame, _db.VisitorTeamId, 1)).Outcome);
+
+            var lockedStarters = await _lineups.GetLockedStartersAsync(managedGame);
+            Assert.Equal(new[] { goalie }, lockedStarters[_db.VisitorTeamId]);
+        }
+
+        [Fact]
+        public async Task ExternalHomeGame_DoesNotRequireLineupsForEitherTeam()
+        {
+            var unmanagedGame = _db.AddGame(_db.VisitorTeamId, _db.HostTeamId, 0, "Scheduled");
+            foreach (var teamId in new[] { _db.VisitorTeamId, _db.HostTeamId })
+            {
+                var game = Assert.Single(await _lineups.ListGamesForTeamAsync(teamId),
+                    item => item.GameId == unmanagedGame);
+                Assert.False(game.IsTipInManaged);
+                Assert.False(game.NeedsLineup);
+                Assert.Equal(CoachRosterOutcome.Forbidden, (await _lineups.GetAsync(unmanagedGame, teamId)).Outcome);
+                Assert.Equal(CoachRosterOutcome.Forbidden,
+                    (await _lineups.SaveAsync(unmanagedGame, teamId, _coach, new SaveLineupRequest())).Outcome);
+                Assert.Equal(CoachRosterOutcome.Forbidden,
+                    (await _lineups.SignAsync(unmanagedGame, teamId, _coach,
+                        new SignLineupRequest { SignerName = "Coach T" })).Outcome);
+                Assert.Equal(CoachRosterOutcome.Forbidden,
+                    (await _lineups.UnlockAsync(unmanagedGame, teamId, Guid.NewGuid(), "test")).Outcome);
+            }
+
+            Assert.False(await _lineups.IsTipInManagedGameAsync(unmanagedGame));
+            Assert.Empty(await _lineups.GetLockedStartersAsync(unmanagedGame));
         }
 
         [Fact]
