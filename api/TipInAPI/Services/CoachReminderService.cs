@@ -18,6 +18,7 @@ namespace TipInAPI.Services
         public string TeamName { get; set; } = "";
         public string? LevelName { get; set; }
         public string? TeamType { get; set; }
+        public bool IsManaged { get; set; }
         public DateTime GameDateTime { get; set; }
         public string ReminderType { get; set; } = "";
         public bool HasTeamAccess { get; set; }
@@ -37,6 +38,9 @@ namespace TipInAPI.Services
             ('final','completed','closed','cancelled','canceled','postponed','in progress','inprogress','live')
             AND ISNULL((SELECT TOP 1 e.EventType FROM dbo.GameLineupEvents e
                 WHERE e.GameId=g.GameId AND e.TeamId=t.Id ORDER BY e.CreatedAtUtc DESC,e.EventId DESC),'') <> 'Sign'";
+        private const string ManagedTeam = @"
+            t.IsExternal=0 AND EXISTS (SELECT 1 FROM dbo.Organizations o
+                WHERE o.OrganizationId=t.OrganizationId AND o.OrganizationType='Managed')";
         private const string Contacts = @"
             SELECT LOWER(LTRIM(RTRIM(a.Email))) AS Email FROM dbo.CoachTeams ct
                 JOIN dbo.AuthUsers a ON a.Id=ct.UserId
@@ -78,6 +82,7 @@ namespace TipInAPI.Services
             var today = CoachReminderSchedule.LocalNow(utcNow).Date;
             var candidates = await conn.QueryAsync<CoachReminderCandidate>($@"
                 SELECT g.GameId,t.Id AS TeamId,t.Name AS TeamName,l.Name AS LevelName,t.TeamType,
+                    CAST(CASE WHEN {ManagedTeam} THEN 1 ELSE 0 END AS bit) AS IsManaged,
                     g.GameDateTime,c.Email
                 FROM dbo.Games g JOIN dbo.Teams t ON t.Id IN(g.HomeTeamId,g.AwayTeamId)
                 LEFT JOIN dbo.Levels l ON l.Id=t.LevelId
@@ -109,7 +114,7 @@ namespace TipInAPI.Services
                     candidate.InvitationOnly = true;
                     candidate.ReminderType = "Invitation";
                 }
-                else if (!stageEnabled) continue;
+                else if (!candidate.IsManaged || !stageEnabled) continue;
                 var delivered = await conn.ExecuteScalarAsync<int>(@"
                     SELECT COUNT(*) FROM dbo.CoachReminderDeliveries
                     WHERE TeamId=@TeamId AND Email=@Email
@@ -160,6 +165,7 @@ namespace TipInAPI.Services
                         CROSS APPLY ({Contacts}) c
                         WHERE g.GameId=@GameId AND t.Id=@TeamId AND c.Email=@Email
                             AND {EligibleGame} AND {AllowedAccount}
+                            AND (@InvitationOnly=1 OR {ManagedTeam})
                             AND g.GameDateTime=@GameDateTime;", candidate);
                     if (eligible == 0 || !IsDue(candidate, utcNow + elapsed.Elapsed)) continue;
                     var claimed = await conn.ExecuteAsync(@"
@@ -222,7 +228,8 @@ namespace TipInAPI.Services
                             SELECT COUNT(*) FROM dbo.Games g JOIN dbo.Teams t ON t.Id IN(g.HomeTeamId,g.AwayTeamId)
                             CROSS APPLY ({Contacts}) c
                             WHERE g.GameId=@GameId AND t.Id=@TeamId AND c.Email=@Email
-                                AND {EligibleGame} AND {AllowedAccount} AND g.GameDateTime=@GameDateTime;", candidate);
+                                AND {EligibleGame} AND {AllowedAccount} AND g.GameDateTime=@GameDateTime
+                                AND (@InvitationOnly=1 OR {ManagedTeam});", candidate);
                         var invitationValid = invitationId == null || await conn.ExecuteScalarAsync<int>(@"
                             SELECT COUNT(*) FROM dbo.CoachInvitations WHERE InvitationId=@invitationId AND Status='Pending'
                                 AND ExpiresAtUtc > SYSUTCDATETIME() AND FailedAttempts < 5;", new { invitationId }) == 1;

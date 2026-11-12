@@ -14,10 +14,15 @@ export async function renderGames(app, teamId, navigate) {
     return;
   }
   app.innerHTML = header + (games.length
-    ? games.map((g) => `<a class="card" href="/teams/${esc(teamId)}/games/${esc(g.gameId)}" data-link>
-        <div class="row spread"><b>${g.isHome ? "vs" : "at"} ${esc(g.opponentDisplayName)}</b>
-          ${g.locked ? `<span class="pill locked">Signed</span>` : needsLineup(g) ? `<span class="pill live">Needs lineup</span>` : ""}</div>
-        <div class="muted small">${esc(formatGameTime(g.gameDateTime))}</div></a>`).join("")
+    ? games.map((g) => {
+      const card = `<div class="row spread"><b>${g.isHome ? "vs" : "at"} ${esc(g.opponentDisplayName)}</b>
+        ${g.isManaged ? g.locked ? `<span class="pill locked">Signed</span>` : needsLineup(g) ? `<span class="pill live">Needs lineup</span>` : ""
+          : `<span class="pill">No lineup required</span>`}</div>
+        <div class="muted small">${esc(formatGameTime(g.gameDateTime))}</div>`;
+      return g.isManaged
+        ? `<a class="card" href="/teams/${esc(teamId)}/games/${esc(g.gameId)}" data-link>${card}</a>`
+        : `<div class="card">${card}</div>`;
+    }).join("")
     : `<div class="card muted">No games in the next 60 days.</div>`);
   wireTabs(app, navigate);
 }

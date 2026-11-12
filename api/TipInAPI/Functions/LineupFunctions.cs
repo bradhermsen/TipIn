@@ -108,6 +108,7 @@ namespace TipInAPI.Functions
             {
                 CoachRosterOutcome.Ok => await Json(req, HttpStatusCode.OK, result.Data ?? new { ok = true }),
                 CoachRosterOutcome.NotFound => await Json(req, HttpStatusCode.NotFound, new { error = result.Message }),
+                CoachRosterOutcome.Forbidden => await Json(req, HttpStatusCode.Forbidden, new { error = result.Message }),
                 CoachRosterOutcome.Warning => await Json(req, HttpStatusCode.Conflict, new { error = result.Message, details = result.Data }),
                 _ => await Json(req, HttpStatusCode.BadRequest, new { error = result.Message }),
             };
