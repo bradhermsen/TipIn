@@ -42,7 +42,8 @@ namespace TipInAPI.Repositories
                     NULLIF(LTRIM(RTRIM(CONCAT(COALESCE(l2.FirstName, ''), ' ', COALESCE(l2.LastName, '')))), '') AS Linesman2,
                     g.PeriodLengthMinutes,
                     g.Status,
-                    CAST(CASE WHEN EXISTS (SELECT 1 FROM Organizations mo WHERE mo.OrganizationId = ht.OrganizationId AND mo.OrganizationType = 'Managed') THEN 1 ELSE 0 END AS bit) AS IsTipInManaged
+                    CAST(CASE WHEN EXISTS (SELECT 1 FROM Organizations mo WHERE mo.OrganizationId = ht.OrganizationId AND mo.OrganizationType = 'Managed')
+                        AND ISNULL(ht.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsTipInManaged
                 FROM Games g
                 LEFT JOIN Teams ht ON g.HomeTeamId = ht.Id
                 LEFT JOIN Teams at ON g.AwayTeamId = at.Id
@@ -107,7 +108,8 @@ namespace TipInAPI.Repositories
                     COALESCE(hl.Name, al.Name) AS LevelName,
                     (SELECT COUNT(*) FROM GameGoals gg WHERE gg.GameId = g.GameId AND gg.ScoringTeamId = g.HomeTeamId) AS HomeScore,
                     (SELECT COUNT(*) FROM GameGoals gg WHERE gg.GameId = g.GameId AND gg.ScoringTeamId = g.AwayTeamId) AS AwayScore,
-                    CAST(CASE WHEN EXISTS (SELECT 1 FROM Organizations mo WHERE mo.OrganizationId = ht.OrganizationId AND mo.OrganizationType = 'Managed') THEN 1 ELSE 0 END AS bit) AS IsTipInManaged
+                    CAST(CASE WHEN EXISTS (SELECT 1 FROM Organizations mo WHERE mo.OrganizationId = ht.OrganizationId AND mo.OrganizationType = 'Managed')
+                        AND ISNULL(ht.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsTipInManaged
                 FROM Games g
                 LEFT JOIN Teams ht ON ht.Id = g.HomeTeamId
                 LEFT JOIN Teams at ON at.Id = g.AwayTeamId
@@ -188,7 +190,8 @@ namespace TipInAPI.Repositories
                     g.Status,
                     g.CreatedAt,
                     g.UpdatedAt,
-                    CAST(CASE WHEN EXISTS (SELECT 1 FROM Organizations mo WHERE mo.OrganizationId = ht.OrganizationId AND mo.OrganizationType = 'Managed') THEN 1 ELSE 0 END AS bit) AS IsTipInManaged
+                    CAST(CASE WHEN EXISTS (SELECT 1 FROM Organizations mo WHERE mo.OrganizationId = ht.OrganizationId AND mo.OrganizationType = 'Managed')
+                        AND ISNULL(ht.IsExternal,0)=0 THEN 1 ELSE 0 END AS bit) AS IsTipInManaged
                 FROM Games g
                 LEFT JOIN Teams ht ON g.HomeTeamId = ht.Id
                 LEFT JOIN Teams at ON g.AwayTeamId = at.Id

@@ -338,7 +338,8 @@ namespace TipInAPI.Functions
             }
 
             using var conn = _connectionFactory.CreateConnection();
-            var rows = (await conn.QueryAsync<PublicRosterSourceRow>(@"
+            var rows = game.IsTipInManaged
+                ? (await conn.QueryAsync<PublicRosterSourceRow>(@"
                 SELECT
                     r.TeamId,
                     r.PlayerId,
@@ -352,11 +353,16 @@ namespace TipInAPI.Functions
                 INNER JOIN Players p ON p.PlayerId = r.PlayerId
                 WHERE r.TeamId IN @TeamIds AND r.RemovedAtUtc IS NULL
                 ORDER BY r.TeamId, COALESCE(r.JerseyNumber, p.JerseyNumber), p.LastName, p.FirstName;",
-                new { TeamIds = new[] { game.HomeTeamId, game.AwayTeamId } })).ToList();
+                    new { TeamIds = new[] { game.HomeTeamId, game.AwayTeamId } })).ToList()
+                : new List<PublicRosterSourceRow>();
 
             var liveStatus = await GetLiveStatusAsync(gameId);
-            var homeStarterIds = ParseIdList(liveStatus.HomeStartersJson);
-            var awayStarterIds = ParseIdList(liveStatus.AwayStartersJson);
+            var homeStarterIds = game.IsTipInManaged
+                ? ParseIdList(liveStatus.HomeStartersJson)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var awayStarterIds = game.IsTipInManaged
+                ? ParseIdList(liveStatus.AwayStartersJson)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var rosterPayload = BuildPublicRosterPayload(game, report, rows, homeStarterIds, awayStarterIds);
             var response = req.CreateResponse(HttpStatusCode.OK);

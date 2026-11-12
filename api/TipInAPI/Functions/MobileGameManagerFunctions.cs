@@ -765,29 +765,38 @@ namespace TipInAPI.Functions
 
             using var conn = _connectionFactory.CreateConnection();
 
-            // Signed lineups are locked: reject starter changes and never let a null overwrite them
-            var lockedStarters = await _lineupService.GetLockedStartersAsync(gameId);
-            if (lockedStarters.Count > 0)
+            // Starter lists are game-lineup data and are only retained for TipIn-managed games.
+            if (!await _lineupService.IsTipInManagedGameAsync(gameId))
             {
-                var teams = await _lineupService.GetGameTeamsAsync(gameId);
-                if (teams != null)
+                payload.HomeStarterIds = null;
+                payload.AwayStarterIds = null;
+            }
+            else
+            {
+                // Signed lineups are locked: reject starter changes and never let a null overwrite them.
+                var lockedStarters = await _lineupService.GetLockedStartersAsync(gameId);
+                if (lockedStarters.Count > 0)
                 {
-                    foreach (var (teamId, submitted, isHome) in new[]
+                    var teams = await _lineupService.GetGameTeamsAsync(gameId);
+                    if (teams != null)
                     {
-                        (teams.Value.HomeTeamId, payload.HomeStarterIds, true),
-                        (teams.Value.AwayTeamId, payload.AwayStarterIds, false),
-                    })
-                    {
-                        if (!lockedStarters.TryGetValue(teamId, out var locked)) continue;
-                        if (submitted != null && !submitted.Select(s => s.ToString().ToLowerInvariant()).OrderBy(s => s)
-                                .SequenceEqual(locked.Select(s => s.ToString().ToLowerInvariant()).OrderBy(s => s)))
+                        foreach (var (teamId, submitted, isHome) in new[]
                         {
-                            var conflict = req.CreateResponse(HttpStatusCode.Conflict);
-                            await conflict.WriteAsJsonAsync(new { error = "The lineup is signed and locked.", code = "LINEUP_LOCKED" });
-                            return conflict;
+                            (teams.Value.HomeTeamId, payload.HomeStarterIds, true),
+                            (teams.Value.AwayTeamId, payload.AwayStarterIds, false),
+                        })
+                        {
+                            if (!lockedStarters.TryGetValue(teamId, out var locked)) continue;
+                            if (submitted != null && !submitted.Select(s => s.ToString().ToLowerInvariant()).OrderBy(s => s)
+                                    .SequenceEqual(locked.Select(s => s.ToString().ToLowerInvariant()).OrderBy(s => s)))
+                            {
+                                var conflict = req.CreateResponse(HttpStatusCode.Conflict);
+                                await conflict.WriteAsJsonAsync(new { error = "The lineup is signed and locked.", code = "LINEUP_LOCKED" });
+                                return conflict;
+                            }
+                            if (isHome) payload.HomeStarterIds = locked.Select(g => g.ToString()).ToList();
+                            else payload.AwayStarterIds = locked.Select(g => g.ToString()).ToList();
                         }
-                        if (isHome) payload.HomeStarterIds = locked.Select(g => g.ToString()).ToList();
-                        else payload.AwayStarterIds = locked.Select(g => g.ToString()).ToList();
                     }
                 }
             }

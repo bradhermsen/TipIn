@@ -182,7 +182,7 @@ namespace TipInAPI.Tests
         }
 
         [Fact]
-        public async Task ExternalTeamsReceiveAccessInvitationsButNotGameDayRosterOrLineupReminders()
+        public async Task ExternalVisitorsReceiveInvitationsAndManagedGameRemindersAfterAssignment()
         {
             using var s = new Scenario();
             var externalEmail = s.Db.NewEmail("external");
@@ -202,7 +202,34 @@ namespace TipInAPI.Tests
             using (var conn = s.Db.Factory.CreateConnection())
                 conn.Execute("UPDATE Teams SET HeadCoachEmail=@email WHERE Id=@team",
                     new { email = assignedEmail, team = s.Db.VisitorTeamId });
-            Assert.Empty(await s.Service().PreviewAsync(Utc("2038-11-10 08:00")));
+            var reminders = await s.Service().PreviewAsync(Utc("2038-11-10 08:00"));
+            var reminder = Assert.Single(reminders);
+            Assert.Equal(s.Db.VisitorTeamId, reminder.TeamId);
+            Assert.False(reminder.InvitationOnly);
+            Assert.Equal("LineupReminder", reminder.ReminderType);
+            Assert.Equal(1, await s.Service().RunAsync(Utc("2038-11-10 08:00")));
+            var reminderEmail = Assert.Single(s.Mail.Sent, message =>
+                message.To.Any(email => string.Equals(email, assignedEmail, StringComparison.OrdinalIgnoreCase)));
+            Assert.Contains("lineup", reminderEmail.Subject, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task ExternalHomeGameDoesNotTriggerRosterRemindersOrInvitationsForEitherTeam()
+        {
+            using var s = new Scenario();
+            s.Head();
+            var externalEmail = s.Db.NewEmail("external");
+            using (var conn = s.Db.Factory.CreateConnection())
+            {
+                conn.Execute("UPDATE dbo.Teams SET HeadCoachEmail=@email WHERE Id=@team",
+                    new { email = externalEmail, team = s.Db.VisitorTeamId });
+                conn.Execute("UPDATE dbo.Games SET HomeTeamId=@external, AwayTeamId=@managed WHERE GameId=@game;",
+                    new { external = s.Db.VisitorTeamId, managed = s.Db.HostTeamId, game = s.GameId });
+            }
+
+            Assert.Empty(await s.Service().PreviewAsync(s.Now));
+            Assert.Equal(0, await s.Service().RunAsync(s.Now));
+            Assert.Empty(s.Mail.Sent);
         }
 
         [Fact]
