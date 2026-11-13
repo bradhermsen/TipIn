@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
@@ -217,10 +218,12 @@ namespace TipInAPI.Functions
             Guid teamId)
         {
             using var conn = _connectionFactory.CreateConnection();
+            var now = CoachReminderSchedule.LocalNow(DateTime.UtcNow);
 
             const string sql = @"
                 SELECT TOP 1
                     g.GameId,
+                    t.Name AS TeamName,
                     g.HomeTeamId,
                     ht.Name AS HomeTeamName,
                     COALESCE(NULLIF(ht.TeamMascot, ''), ho.Mascot) AS HomeTeamMascot,
@@ -269,7 +272,7 @@ namespace TipInAPI.Functions
                                     )
                                             AND (
                                                 UPPER(ISNULL(g.Status, 'SCHEDULED')) IN ('IN PROGRESS', 'IN_PROGRESS', 'ACTIVE')
-                                                OR g.GameDateTime BETWEEN DATEADD(HOUR, -6, SYSUTCDATETIME()) AND DATEADD(HOUR, 48, SYSUTCDATETIME())
+                                                OR g.GameDateTime BETWEEN DATEADD(HOUR, -6, @Now) AND DATEADD(HOUR, 48, @Now)
                                             )
                                 ORDER BY
                                             CASE
@@ -277,23 +280,23 @@ namespace TipInAPI.Functions
                                                 ELSE 1
                                             END,
                                         CASE
-                                                WHEN CAST(g.GameDateTime AS date) = CAST(SYSDATETIME() AS date) THEN 0
+                                                WHEN CAST(g.GameDateTime AS date) = CAST(@Now AS date) THEN 0
                                                 ELSE 1
                                         END,
                                         CASE
-                                                WHEN CAST(g.GameDateTime AS date) = CAST(SYSDATETIME() AS date)
-                                                         AND g.GameDateTime >= SYSDATETIME() THEN 0
-                                                WHEN CAST(g.GameDateTime AS date) = CAST(SYSDATETIME() AS date) THEN 1
+                                                WHEN CAST(g.GameDateTime AS date) = CAST(@Now AS date)
+                                                         AND g.GameDateTime >= @Now THEN 0
+                                                WHEN CAST(g.GameDateTime AS date) = CAST(@Now AS date) THEN 1
                                                 ELSE 0
                                         END,
                                         CASE
-                                                WHEN CAST(g.GameDateTime AS date) = CAST(SYSDATETIME() AS date)
-                                                        THEN ABS(DATEDIFF(MINUTE, SYSDATETIME(), g.GameDateTime))
-                                                ELSE DATEDIFF(MINUTE, SYSUTCDATETIME(), g.GameDateTime)
+                                                WHEN CAST(g.GameDateTime AS date) = CAST(@Now AS date)
+                                                        THEN ABS(DATEDIFF(MINUTE, @Now, g.GameDateTime))
+                                                ELSE DATEDIFF(MINUTE, @Now, g.GameDateTime)
                                         END,
                                         g.GameDateTime ASC;";
 
-            var nextGame = await conn.QueryFirstOrDefaultAsync<MobileNextGameDto>(sql, new { TeamId = teamId });
+            var nextGame = await conn.QueryFirstOrDefaultAsync<MobileNextGameDto>(sql, new { TeamId = teamId, Now = now });
             if (nextGame == null)
             {
                 const string closedSql = @"
@@ -323,7 +326,7 @@ namespace TipInAPI.Functions
                         closedGame.GameId,
                         closedGame.StartTime,
                         closedGame.Status
-                    });
+                    }, HttpStatusCode.Gone);
                     return gone;
                 }
 
@@ -332,21 +335,45 @@ namespace TipInAPI.Functions
 
             var normalizedStatus = (nextGame.Status ?? "SCHEDULED").Trim().ToUpperInvariant();
             var isActive = normalizedStatus is "IN PROGRESS" or "IN_PROGRESS" or "ACTIVE";
-            if (!isActive && nextGame.StartTime > DateTime.UtcNow.AddHours(4))
+            if (!isActive && nextGame.StartTime > now.AddHours(4))
             {
-                var tooEarly = req.CreateResponse((HttpStatusCode)425);
+                var status = (HttpStatusCode)425;
+                var loginOpensAt = nextGame.StartTime.AddHours(-4);
+                var message = "Your access code is valid. Game Manager login opens four hours before the scheduled game time.\n\n"
+                    + $"Team: {nextGame.TeamName}\n"
+                    + $"Level: {nextGame.LevelName}\n"
+                    + $"Type: {nextGame.TeamType}\n"
+                    + $"Opponent: {nextGame.OpponentName}\n"
+                    + $"Game time: {FormatGameLoginTime(nextGame.StartTime)}\n"
+                    + $"Login opens: {FormatGameLoginTime(loginOpensAt)}\n\n"
+                    + "Please try again when login opens.";
+                var tooEarly = req.CreateResponse(status);
                 await tooEarly.WriteAsJsonAsync(new
                 {
                     error = "login_too_early",
-                    message = $"Login opens four hours before the scheduled game time ({nextGame.StartTime:u}).",
-                    nextGame.StartTime
-                });
+                    title = "Login Not Open Yet",
+                    message,
+                    nextGame.TeamName,
+                    nextGame.LevelName,
+                    nextGame.TeamType,
+                    nextGame.OpponentName,
+                    nextGame.StartTime,
+                    loginOpensAt,
+                    timeZone = CoachReminderSchedule.Central.Id
+                }, status);
                 return tooEarly;
             }
 
             var response = req.CreateResponse(HttpStatusCode.OK);
             await response.WriteAsJsonAsync(nextGame);
             return response;
+        }
+
+        private static string FormatGameLoginTime(DateTime scheduledTime)
+        {
+            var localTime = DateTime.SpecifyKind(scheduledTime, DateTimeKind.Unspecified);
+            var zone = CoachReminderSchedule.Central.IsDaylightSavingTime(localTime) ? "CDT" : "CST";
+            return $"{localTime.ToString("dddd, MMMM d 'at' h:mm tt", CultureInfo.GetCultureInfo("en-US"))} {zone}";
         }
 
         [Function("GetGameGatewayForMobile")]
@@ -2071,6 +2098,7 @@ namespace TipInAPI.Functions
         private class MobileNextGameDto
         {
             public Guid GameId { get; set; }
+            public string TeamName { get; set; } = string.Empty;
             public Guid HomeTeamId { get; set; }
             public string HomeTeamName { get; set; } = string.Empty;
             public string? HomeTeamMascot { get; set; }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Security.Claims;
@@ -24,6 +25,76 @@ namespace TipInAPI.Tests
 {
     public class CoachHttpResponseTests
     {
+        [Theory]
+        [InlineData("Scheduled", 5, 425)]
+        [InlineData("Scheduled", 4, 200)]
+        [InlineData("In Progress", 5, 200)]
+        [InlineData("Final", -1, 410)]
+        [InlineData("Scheduled", 50, 404)]
+        public async Task MobileNextGame_PreservesStatus_AndUsesScheduledCentralLoginWindow(string gameStatus, int hoursAhead, int expectedStatus)
+        {
+            using var db = new TestDatabase();
+            using var services = CreateServices();
+            using var conn = db.Factory.CreateConnection();
+            var start = CoachReminderSchedule.LocalNow(DateTime.UtcNow).AddHours(hoursAhead);
+            start = start.AddTicks(-(start.Ticks % TimeSpan.TicksPerSecond));
+            var game = db.AddGame(db.HostTeamId, db.VisitorTeamId, 0, gameStatus);
+            conn.Execute(@"UPDATE Games SET GameDateTime=@start WHERE GameId=@game;
+                UPDATE Teams SET Name='Winona',TeamType='Girls' WHERE Id=@home;
+                UPDATE Teams SET Name='South Central' WHERE Id=@away;",
+                new { start, game, home = db.HostTeamId, away = db.VisitorTeamId });
+            var level = conn.ExecuteScalar<string>(
+                "SELECT l.Name FROM Teams t JOIN Levels l ON l.Id=t.LevelId WHERE t.Id=@home",
+                new { home = db.HostTeamId });
+            var functions = new MobileGameManagerFunctions(db.Factory, null!, null!, null!,
+                new AccessCodeService(), new LineupService(db.Factory));
+            var response = await functions.GetTeamNextGame(new TestRequest(new TestContext(services)), db.HostTeamId);
+            Assert.Equal((HttpStatusCode)expectedStatus, response.StatusCode);
+            if (expectedStatus == 404) return;
+            response.Body.Position = 0;
+            using var json = await JsonDocument.ParseAsync(response.Body);
+            var body = json.RootElement;
+            if (expectedStatus == 425)
+            {
+                Assert.Equal("login_too_early", body.GetProperty("error").GetString());
+                Assert.Equal("Login Not Open Yet", body.GetProperty("title").GetString());
+                Assert.Equal("Winona", body.GetProperty("teamName").GetString());
+                Assert.Equal(level, body.GetProperty("levelName").GetString());
+                Assert.Equal("Girls", body.GetProperty("teamType").GetString());
+                Assert.Equal("South Central", body.GetProperty("opponentName").GetString());
+                Assert.Equal(start.AddHours(-4), body.GetProperty("loginOpensAt").GetDateTime());
+                Assert.Equal("America/Chicago", body.GetProperty("timeZone").GetString());
+                var zone = CoachReminderSchedule.Central.IsDaylightSavingTime(start) ? "CDT" : "CST";
+                var culture = CultureInfo.GetCultureInfo("en-US");
+                Assert.Equal("Your access code is valid. Game Manager login opens four hours before the scheduled game time.\n\n"
+                    + $"Team: Winona\nLevel: {level}\nType: Girls\nOpponent: South Central\n"
+                    + $"Game time: {start.ToString("dddd, MMMM d 'at' h:mm tt", culture)} {zone}\n"
+                    + $"Login opens: {start.AddHours(-4).ToString("dddd, MMMM d 'at' h:mm tt", culture)} {zone}\n\n"
+                    + "Please try again when login opens.", body.GetProperty("message").GetString());
+            }
+            else if (expectedStatus == 200)
+            {
+                Assert.Equal(game, body.GetProperty("gameId").GetGuid());
+                Assert.Equal(db.HostTeamId, body.GetProperty("homeTeamId").GetGuid());
+            }
+            else
+            {
+                Assert.True(body.GetProperty("isClosed").GetBoolean());
+            }
+        }
+
+        [Theory]
+        [InlineData("2026-11-14T13:00:00", "Saturday, November 14 at 1:00 PM CST", "Saturday, November 14 at 9:00 AM CST")]
+        [InlineData("2026-07-14T13:00:00", "Tuesday, July 14 at 1:00 PM CDT", "Tuesday, July 14 at 9:00 AM CDT")]
+        [InlineData("2026-11-14T02:00:00", "Saturday, November 14 at 2:00 AM CST", "Friday, November 13 at 10:00 PM CST")]
+        public void MobileLoginNotice_FormatsGameAndOpeningDatesInCentralTime(string scheduled, string gameTime, string opensAt)
+        {
+            var start = DateTime.Parse(scheduled, CultureInfo.InvariantCulture);
+            var method = typeof(MobileGameManagerFunctions).GetMethod("FormatGameLoginTime", BindingFlags.NonPublic | BindingFlags.Static)!;
+            Assert.Equal(gameTime, method.Invoke(null, new object[] { start }));
+            Assert.Equal(opensAt, method.Invoke(null, new object[] { start.AddHours(-4) }));
+        }
+
         [Fact]
         public async Task GameManagerAccessEndpoint_RequiresAuthenticationAndScope_AndIsNeverCached()
         {

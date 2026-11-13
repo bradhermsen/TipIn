@@ -20,6 +20,56 @@ function load(names, bindings) {
   return context;
 }
 
+test("early login preserves the server message and title for HTTP 425 and legacy HTTP 200", async () => {
+  const message = "Your access code is valid.\n\nTeam: Winona\nLevel: Varsity\nType: Girls\nOpponent: South Central\nGame time: Saturday, November 14 at 1:00 PM CST\nLogin opens: Saturday, November 14 at 9:00 AM CST";
+  for (const status of [425, 200]) {
+    const context = load(["fetchNextGameForTeam"], {
+      activeApiBase: "https://fixture/api", trace: () => {}, summarizePayload: () => {},
+      fetch: async () => ({
+        ok: status === 200, status,
+        json: async () => ({ error: "login_too_early", message, startTime: "2026-11-14T13:00:00" }),
+      }),
+      normalizeNextGame: () => { throw new Error("Early-login errors must not be interpreted as game records."); },
+    });
+    const result = await context.fetchNextGameForTeam("home");
+    assert.equal(result.nextGame, null);
+    assert.equal(result.closedMessage, message);
+    assert.equal(result.closedTitle, "Login Not Open Yet");
+  }
+});
+
+test("early-login notice reaches the login panel without replacing team and opening-time details", async () => {
+  const state = {};
+  const setter = key => value => { state[key] = value; };
+  const message = "Team: Winona\nLevel: Varsity\nType: Girls\nOpponent: South Central\nLogin opens: Saturday, November 14 at 9:00 AM CST";
+  const context = load(["loadNextGame", "handleLoginSuccess"], {
+    session: null, activeApiBase: "https://fixture/api", trace: () => {},
+    setSession: () => {}, setGameStartedAtIso: () => {}, setGameHasEnded: () => {},
+    setStage: setter("stage"), setRestoreStatus: () => {},
+    setError: setter("error"), setLoginErrorTitle: setter("title"),
+    loadActiveGameSnapshot: async () => null, loadActiveGameResume: async () => null,
+    hasActiveGameMarker: async () => false,
+    fetchTeamsForUser: async () => [{ teamId: "home" }], getTeamId: team => team.teamId,
+    fetchNextGameForTeam: async () => ({ nextGame: null, closedMessage: message, closedTitle: "Login Not Open Yet" }),
+    setIsNextGameLoading: () => {}, setIsRefreshingNextGame: () => {},
+    setNextGame: () => {}, setIsClosedGameNotice: () => {}, setNextGameMessage: () => {},
+  });
+  await context.handleLoginSuccess({ userId: "user", role: "GM" }, "GM-FIXTURE");
+  assert.equal(state.stage, "login");
+  assert.equal(state.title, "Login Not Open Yet");
+  assert.equal(state.error, message);
+});
+
+test("closed games retain their existing notice instead of the early-login title", async () => {
+  const context = load(["fetchNextGameForTeam"], {
+    activeApiBase: "https://fixture/api", trace: () => {}, summarizePayload: () => {},
+    fetch: async () => ({ ok: false, status: 410, json: async () => ({ isClosed: true, message: "This game is closed." }) }),
+  });
+  const result = await context.fetchNextGameForTeam("home");
+  assert.equal(result.closedMessage, "This game is closed.");
+  assert.equal(result.closedTitle, undefined);
+});
+
 test("saved lineup request uses explicit login code before React session updates", async () => {
   let headers;
   const lineup = { version: 5, locked: true, participantIds: ["a"], starterIds: ["a"], signedBy: "Coach" };

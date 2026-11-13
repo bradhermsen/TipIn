@@ -85,6 +85,7 @@ type NextGame = {
 type NextGameLookupResult = {
   nextGame: NextGame | null;
   closedMessage?: string;
+  closedTitle?: string;
 };
 
 type DebugPayload = Record<string, unknown>;
@@ -1678,6 +1679,7 @@ export default function App() {
   const [restoreStatus, setRestoreStatus] = useState("idle");
   const [accessCodeInput, setAccessCodeInput] = useState("");
   const [error, setError] = useState("");
+  const [loginErrorTitle, setLoginErrorTitle] = useState("Unable to Continue");
   const [session, setSession] = useState<SessionState | null>(null);
   const [gameHasEnded, setGameHasEnded] = useState(false);
   const [nextGame, setNextGame] = useState<NextGame | null>(null);
@@ -5748,13 +5750,22 @@ export default function App() {
         String(payload?.status ?? payload?.Status ?? "").toUpperCase(),
       );
 
-    if (!response.ok || payloadIsClosed) {
-      if (response.status === 410 || response.status === 425) {
+    const loginTooEarly =
+      response.status === 425 || payload?.error === "login_too_early";
+
+    if (!response.ok || payloadIsClosed || loginTooEarly) {
+      if (response.status === 410 || loginTooEarly) {
         const closedMessage =
           (typeof payload?.Message === "string" && payload.Message) ||
           (typeof payload?.message === "string" && payload.message) ||
-          "The scheduled game is closed.";
-        return { nextGame: null, closedMessage };
+          (loginTooEarly
+            ? "Game Manager login opens four hours before the scheduled game time. Please try again when login opens."
+            : "The scheduled game is closed.");
+        return {
+          nextGame: null,
+          closedMessage,
+          closedTitle: loginTooEarly ? "Login Not Open Yet" : undefined,
+        };
       }
       if (payloadIsClosed) {
         const closedMessage =
@@ -6589,6 +6600,7 @@ export default function App() {
   ): Promise<{
     status: "games" | "no_games" | "invalid" | "error";
     message?: string;
+    title?: string;
   }> {
     trace("nextgame.load.start", { userId, refreshing });
 
@@ -6627,9 +6639,7 @@ export default function App() {
         .map((result) => result.nextGame)
         .filter((game): game is NextGame => Boolean(game));
 
-      const closedMessages = lookupResults
-        .map((result) => result.closedMessage)
-        .filter((message): message is string => Boolean(message));
+      const notice = lookupResults.find((result) => result.closedMessage);
 
       trace("nextgame.load.games", {
         totalGames: games.length,
@@ -6638,11 +6648,11 @@ export default function App() {
       if (games.length === 0) {
         trace("nextgame.load.none");
         setNextGame(null);
-        if (closedMessages.length > 0) {
+        if (notice?.closedMessage) {
           setIsClosedGameNotice(true);
-          const message = closedMessages[0];
+          const message = notice.closedMessage;
           setNextGameMessage(message);
-          return { status: "no_games", message };
+          return { status: "no_games", message, title: notice.closedTitle };
         } else {
           setIsClosedGameNotice(false);
           const message =
@@ -6861,6 +6871,7 @@ export default function App() {
     }
 
     if (nextGameResult.status === "no_games") {
+      setLoginErrorTitle(nextGameResult.title || "Unable to Continue");
       setError(
         nextGameResult.message ||
           "No home game is scheduled for this team within the next 48 hours.",
@@ -6883,6 +6894,7 @@ export default function App() {
   }
 
   async function handleAccessCodeContinue() {
+    setLoginErrorTitle("Unable to Continue");
     const normalized = accessCodeInput.trim().toUpperCase();
     const role = parseRoleFromAccessCode(normalized);
 
@@ -7884,7 +7896,7 @@ export default function App() {
                 accessibilityRole="alert"
                 accessibilityLiveRegion="assertive"
               >
-                <Text style={styles.loginErrorTitle}>Unable to Continue</Text>
+                <Text style={styles.loginErrorTitle}>{loginErrorTitle}</Text>
                 <Text style={styles.loginErrorText}>{error}</Text>
               </View>
             ) : null}

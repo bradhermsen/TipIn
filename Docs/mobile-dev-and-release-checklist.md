@@ -155,6 +155,21 @@ Before sharing APK:
 4. Cancelled/postponed games are not selected.
 5. If nothing valid is scheduled, app shows `No Scheduled Games Found`.
 
+### Login before the game window
+
+Game Manager login opens four hours before the scheduled Central game time.
+Before that, the API returns HTTP 425 (`login_too_early`) with the title
+`Login Not Open Yet` and the approved message: the access code is valid, followed
+by team, level, type, opponent, game time, login-opening time, and a request to
+try again when login opens. Both times include the date and CST/CDT designation.
+The tablet also recognizes older HTTP 200 responses carrying `login_too_early`
+instead of misreporting a home-team authorization error.
+
+Verify a scheduled game before and inside the four-hour window, an active game,
+and a finalized game. Confirm that a 1:00 PM Central game opens at 9:00 AM Central.
+Deploy the API correction for the detailed message; a rebuilt APK is required
+for the new panel title and legacy-response handling.
+
 ## 6) Suggested Daily Flow
 
 1. Develop/test in dev client.
