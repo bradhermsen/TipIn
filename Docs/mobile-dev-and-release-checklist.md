@@ -140,10 +140,18 @@ running Gradle so an existing ignored Android folder cannot retain an old versio
 $env:APP_ENV = "dev"
 $env:EXPO_PUBLIC_API_BASE = "https://api-dev.tipinscoring.com/api"
 npm run android:sync
-.\android\gradlew.bat :app:assembleRelease --console=plain
+Set-Location .\android
+.\gradlew.bat :app:createBundleReleaseJsAndAssets --rerun-tasks --console=plain
+.\gradlew.bat :app:assembleRelease --console=plain
+Set-Location ..
 ```
 
 Use `APP_ENV=production` and the production API URL for a production build.
+Force the JavaScript bundle task even when native configuration was synchronized:
+Gradle can otherwise reuse a bundle from the previous environment because API
+environment-variable changes do not invalidate that task. Before distribution,
+inspect `assets/index.android.bundle` in the APK and confirm the intended API URL
+is present and the other environment's API URL is absent.
 Local release builds must still be signed with the existing environment's
 release key before distribution; do not distribute the default debug-signed APK.
 EAS generates its native project from the same committed app configuration.
