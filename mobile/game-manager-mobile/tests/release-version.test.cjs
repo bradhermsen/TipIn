@@ -66,16 +66,52 @@ for (const statement of source.statements) {
 const metadataCode = ["IS_GAME_MANAGER_BINARY", "APP_RELEASE_ENVIRONMENT", "APP_RELEASE_VERSION", "APP_RELEASE_BUILD", "APP_RELEASE_LABEL"]
   .map(name => declarations.get(name)).join("\n");
 const labels = new Map();
+const labelNodes = new Map();
 function findLabels(node) {
   if (ts.isJsxElement(node)) {
     const id = node.openingElement.attributes.properties.find(attribute =>
       ts.isJsxAttribute(attribute) && attribute.name.getText(source) === "testID" &&
       attribute.initializer && ts.isStringLiteral(attribute.initializer));
-    if (id) labels.set(id.initializer.text, node.getText(source));
+    if (id) {
+      labels.set(id.initializer.text, node.getText(source));
+      labelNodes.set(id.initializer.text, node);
+    }
   }
   ts.forEachChild(node, findLabels);
 }
 findLabels(source);
+
+test("login version stays in a bottom footer outside scrolling content and is hidden on other screens", () => {
+  const label = labelNodes.get("login-release-info");
+  assert.ok(label);
+  let root;
+  let condition;
+  for (let ancestor = label.parent; ancestor; ancestor = ancestor.parent) {
+    if (ts.isJsxElement(ancestor)) {
+      const tag = ancestor.openingElement.tagName.getText(source);
+      assert.notEqual(tag, "ScrollView", "The version footer must not scroll with login content.");
+      if (tag === "SafeAreaView") root = ancestor;
+    }
+    if (ts.isConditionalExpression(ancestor) && ancestor.condition.getText(source) === 'stage === "login"') {
+      condition = ancestor;
+    }
+  }
+  assert.ok(root);
+  assert.ok(condition, "Only the login screen should have this footer.");
+  const content = root.children.find(child =>
+    ts.isJsxElement(child) && child.openingElement.tagName.getText(source) === "ScrollView");
+  assert.ok(content && content.end < label.getStart(source), "Footer must follow the main scroll area.");
+  const script = ts.transpileModule(condition.getText(source), {
+    compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  for (const stage of ["login", "verifyGame", "gameDashboard"]) {
+    const rendered = vm.runInNewContext(script, {
+      stage, APP_RELEASE_LABEL: "DEV \u00b7 v1.0.1 (build 2)", styles: {}, View: "View", Text: "Text",
+      React: { createElement: (_type, _props, ...children) => children.join("") },
+    });
+    assert.equal(rendered, stage === "login" ? "DEV \u00b7 v1.0.1 (build 2)" : null);
+  }
+});
 
 test("login and Settings show the installed APK identity rather than a newer manifest or API environment", () => {
   for (const environment of ["DEV", "PROD"]) {

@@ -112,8 +112,9 @@ EAS builds: `expo.version` is the user-facing major.minor.patch version and
 `cli.appVersionSource=local`; do not enable a separate remote version counter.
 The first numbered release is **1.0.1 (build 2)**.
 
-The login screen and Game Manager Settings display `DEV · v1.0.1 (build 2)` or
-`PROD · v1.0.1 (build 2)`. Installed APKs read the version and build from the
+The login screen's bottom footer and Game Manager Settings display
+`DEV · v1.0.1 (build 2)` or `PROD · v1.0.1 (build 2)`. The login footer stays
+outside the scrolling form and notices. Installed APKs read the version and build from the
 native binary, not a possibly newer JavaScript manifest. Expo Go/web previews
 use the app configuration. DEV/PROD identifies the app package, not an in-app
 API-host override.

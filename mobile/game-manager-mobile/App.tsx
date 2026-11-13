@@ -7832,6 +7832,7 @@ export default function App() {
 
       <ScrollView
         ref={rosterScrollViewRef}
+        style={stage === "login" ? styles.loginScroll : undefined}
         contentContainerStyle={styles.content}
         onScroll={(event) => {
           if (stage === "rosterVerify") {
@@ -7874,8 +7875,6 @@ export default function App() {
                 <Text style={styles.loginBrandSubtitle}>GAME MANAGER</Text>
               </View>
             </View>
-            <Text style={styles.appReleaseLabel} testID="login-release-info">{APP_RELEASE_LABEL}</Text>
-
             <View style={styles.loginIntroBlock}>
               <Text style={styles.loginIntroTitle}>Enter Your Access Code</Text>
               <Text style={styles.loginIntroBody}>
@@ -12662,6 +12661,11 @@ export default function App() {
           </View>
         ) : null}
       </ScrollView>
+      {stage === "login" ? (
+        <View style={styles.loginReleaseFooter}>
+          <Text style={styles.appReleaseLabel} testID="login-release-info">{APP_RELEASE_LABEL}</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -12768,6 +12772,14 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 8,
     gap: 14,
+  },
+  loginScroll: {
+    flex: 1,
+  },
+  loginReleaseFooter: {
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   appReleaseLabel: {
     color: "#7A8FA8",
