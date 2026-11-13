@@ -104,6 +104,67 @@ Goalie rows.
 
 Use this for coaches/testers who should run without Metro, USB, or a connected laptop.
 
+### Release versions and build numbers
+
+`mobile/game-manager-mobile/app.json` is the version source for both local and
+EAS builds: `expo.version` is the user-facing major.minor.patch version and
+`expo.android.versionCode` is the increasing Android build number. EAS uses
+`cli.appVersionSource=local`; do not enable a separate remote version counter.
+The first numbered release is **1.0.1 (build 2)**.
+
+The login screen's bottom footer and Game Manager Settings display
+`DEV · v1.0.1 (build 2)` or `PROD · v1.0.1 (build 2)`. The login footer stays
+outside the scrolling form and notices. Installed APKs read the version and build from the
+native binary, not a possibly newer JavaScript manifest. Expo Go/web previews
+use the app configuration. DEV/PROD identifies the app package, not an in-app
+API-host override.
+
+Before each subsequent new APK, prepare its version from the mobile directory:
+
+```powershell
+npm run release:prepare -- 1.0.2
+```
+
+Bug fixes increment the patch number (`1.0.2`); features increment the minor
+number (`1.1.0`); breaking releases increment the major number (`2.0.0`).
+Omit the version argument to keep the current version and only increment the
+build number. The command rejects invalid or decreasing versions and always
+increments the build number. Commit the updated `app.json` with the release's
+code before building. Do not prepare again when simply reproducing that release.
+The initial 1.0.1/build 2 metadata is already prepared.
+
+For **local Android builds**, synchronize the generated native project before
+running Gradle so an existing ignored Android folder cannot retain an old version:
+
+```powershell
+$env:APP_ENV = "dev"
+$env:EXPO_PUBLIC_API_BASE = "https://api-dev.tipinscoring.com/api"
+npm run android:sync
+.\android\gradlew.bat :app:assembleRelease --console=plain
+```
+
+Use `APP_ENV=production` and the production API URL for a production build.
+Local release builds must still be signed with the existing environment's
+release key before distribution; do not distribute the default debug-signed APK.
+EAS generates its native project from the same committed app configuration.
+
+Name each signed/distributed APK using the prepared metadata:
+
+```powershell
+npm run release:filename -- dev
+# TipIn-GM-Dev-v1.0.1-build2.apk
+```
+
+Use `prod` for `TipIn-GM-Prod-v1.0.1-build2.apk`. Verify the APK's actual
+`versionName`, `versionCode`, and package match before attaching or installing it;
+renaming an older APK does not update its internal version.
+
+Create a GitHub Release from the exact built commit using a tag such as
+`gm-dev-v1.0.1-build2` or `gm-prod-v1.0.1-build2`. Attach the matching signed APK
+and record the environment, version/build, full source commit, release date,
+changes, and validation performed. Repository access is required for downloading
+private-repository release assets; do not assume those links are public.
+
 ### Recommended path: EAS preview APK
 
 Run once:
@@ -154,6 +215,24 @@ Before sharing APK:
 3. Next game selection is correct for current date.
 4. Cancelled/postponed games are not selected.
 5. If nothing valid is scheduled, app shows `No Scheduled Games Found`.
+
+### Login before the game window
+
+Game Manager login opens four hours before the scheduled Central game time.
+Before that, the API returns HTTP 425 (`login_too_early`) with the title
+`Login Not Open Yet` and the approved message: the access code is valid, followed
+by team, level, type, opponent, game time, login-opening time, and a request to
+try again when login opens. Both times include the date and CST/CDT designation.
+The tablet also recognizes older HTTP 200 responses carrying `login_too_early`
+instead of misreporting a home-team authorization error.
+
+Verify a scheduled game before and inside the four-hour window, an active game,
+and a finalized game. Confirm that a 1:00 PM Central game opens at 9:00 AM Central.
+Deploy the API correction for the detailed message; a rebuilt APK is required
+for the new panel title and legacy-response handling.
+
+On the login screen, show the notice only once: the main alert takes precedence
+over the lower next-game status message. Do not display restore-status diagnostics.
 
 ## 6) Suggested Daily Flow
 

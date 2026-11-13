@@ -1,4 +1,6 @@
 import { StatusBar } from "expo-status-bar";
+import * as Application from "expo-application";
+import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -85,6 +87,7 @@ type NextGame = {
 type NextGameLookupResult = {
   nextGame: NextGame | null;
   closedMessage?: string;
+  closedTitle?: string;
 };
 
 type DebugPayload = Record<string, unknown>;
@@ -513,6 +516,19 @@ const DEFAULT_PUBLIC_API_BASE = (
   process.env.EXPO_PUBLIC_API_BASE || PROD_API_BASE
 ).replace(/\/+$/, "");
 const IS_PROD_API = DEFAULT_PUBLIC_API_BASE === PROD_API_BASE;
+const IS_GAME_MANAGER_BINARY =
+  Application.applicationId === "com.TipIn.gamemanager" ||
+  Application.applicationId === "com.TipIn.gamemanager.dev";
+const APP_RELEASE_ENVIRONMENT = IS_GAME_MANAGER_BINARY
+  ? Application.applicationId?.endsWith(".dev") ? "DEV" : "PROD"
+  : Constants.expoConfig?.extra?.appEnvironment ?? "UNKNOWN";
+const APP_RELEASE_VERSION = IS_GAME_MANAGER_BINARY
+  ? Application.nativeApplicationVersion
+  : Constants.expoConfig?.version;
+const APP_RELEASE_BUILD = IS_GAME_MANAGER_BINARY
+  ? Application.nativeBuildVersion
+  : Constants.expoConfig?.android?.versionCode?.toString();
+const APP_RELEASE_LABEL = `${APP_RELEASE_ENVIRONMENT} \u00b7 ${APP_RELEASE_VERSION ? `v${APP_RELEASE_VERSION}` : "Version unavailable"} (build ${APP_RELEASE_BUILD ?? "unavailable"})`;
 
 function isValidEmailAddress(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -1678,6 +1694,7 @@ export default function App() {
   const [restoreStatus, setRestoreStatus] = useState("idle");
   const [accessCodeInput, setAccessCodeInput] = useState("");
   const [error, setError] = useState("");
+  const [loginErrorTitle, setLoginErrorTitle] = useState("Unable to Continue");
   const [session, setSession] = useState<SessionState | null>(null);
   const [gameHasEnded, setGameHasEnded] = useState(false);
   const [nextGame, setNextGame] = useState<NextGame | null>(null);
@@ -5748,13 +5765,22 @@ export default function App() {
         String(payload?.status ?? payload?.Status ?? "").toUpperCase(),
       );
 
-    if (!response.ok || payloadIsClosed) {
-      if (response.status === 410 || response.status === 425) {
+    const loginTooEarly =
+      response.status === 425 || payload?.error === "login_too_early";
+
+    if (!response.ok || payloadIsClosed || loginTooEarly) {
+      if (response.status === 410 || loginTooEarly) {
         const closedMessage =
           (typeof payload?.Message === "string" && payload.Message) ||
           (typeof payload?.message === "string" && payload.message) ||
-          "The scheduled game is closed.";
-        return { nextGame: null, closedMessage };
+          (loginTooEarly
+            ? "Game Manager login opens four hours before the scheduled game time. Please try again when login opens."
+            : "The scheduled game is closed.");
+        return {
+          nextGame: null,
+          closedMessage,
+          closedTitle: loginTooEarly ? "Login Not Open Yet" : undefined,
+        };
       }
       if (payloadIsClosed) {
         const closedMessage =
@@ -6589,6 +6615,7 @@ export default function App() {
   ): Promise<{
     status: "games" | "no_games" | "invalid" | "error";
     message?: string;
+    title?: string;
   }> {
     trace("nextgame.load.start", { userId, refreshing });
 
@@ -6627,9 +6654,7 @@ export default function App() {
         .map((result) => result.nextGame)
         .filter((game): game is NextGame => Boolean(game));
 
-      const closedMessages = lookupResults
-        .map((result) => result.closedMessage)
-        .filter((message): message is string => Boolean(message));
+      const notice = lookupResults.find((result) => result.closedMessage);
 
       trace("nextgame.load.games", {
         totalGames: games.length,
@@ -6638,11 +6663,11 @@ export default function App() {
       if (games.length === 0) {
         trace("nextgame.load.none");
         setNextGame(null);
-        if (closedMessages.length > 0) {
+        if (notice?.closedMessage) {
           setIsClosedGameNotice(true);
-          const message = closedMessages[0];
+          const message = notice.closedMessage;
           setNextGameMessage(message);
-          return { status: "no_games", message };
+          return { status: "no_games", message, title: notice.closedTitle };
         } else {
           setIsClosedGameNotice(false);
           const message =
@@ -6861,6 +6886,7 @@ export default function App() {
     }
 
     if (nextGameResult.status === "no_games") {
+      setLoginErrorTitle(nextGameResult.title || "Unable to Continue");
       setError(
         nextGameResult.message ||
           "No home game is scheduled for this team within the next 48 hours.",
@@ -6883,6 +6909,7 @@ export default function App() {
   }
 
   async function handleAccessCodeContinue() {
+    setLoginErrorTitle("Unable to Continue");
     const normalized = accessCodeInput.trim().toUpperCase();
     const role = parseRoleFromAccessCode(normalized);
 
@@ -7805,6 +7832,7 @@ export default function App() {
 
       <ScrollView
         ref={rosterScrollViewRef}
+        style={stage === "login" ? styles.loginScroll : undefined}
         contentContainerStyle={styles.content}
         onScroll={(event) => {
           if (stage === "rosterVerify") {
@@ -7847,7 +7875,6 @@ export default function App() {
                 <Text style={styles.loginBrandSubtitle}>GAME MANAGER</Text>
               </View>
             </View>
-
             <View style={styles.loginIntroBlock}>
               <Text style={styles.loginIntroTitle}>Enter Your Access Code</Text>
               <Text style={styles.loginIntroBody}>
@@ -7884,15 +7911,11 @@ export default function App() {
                 accessibilityRole="alert"
                 accessibilityLiveRegion="assertive"
               >
-                <Text style={styles.loginErrorTitle}>Unable to Continue</Text>
+                <Text style={styles.loginErrorTitle}>{loginErrorTitle}</Text>
                 <Text style={styles.loginErrorText}>{error}</Text>
               </View>
             ) : null}
-            <Text style={styles.restoreStatusText}>
-              Restore status: {restoreStatus}
-            </Text>
-
-            {nextGameMessage ? (
+            {!error && nextGameMessage ? (
               <Text style={styles.restoreStatusText}>{nextGameMessage}</Text>
             ) : null}
           </View>
@@ -11005,6 +11028,7 @@ export default function App() {
             <View style={styles.confirmOverlay}>
               <View style={styles.goalModal}>
                 <Text style={styles.goalModalTitle}>Game Manager Settings</Text>
+                <Text style={styles.appReleaseLabel} testID="settings-release-info">{APP_RELEASE_LABEL}</Text>
                 <Text style={styles.sectionLabel}>GAME MODE</Text>
                 <Text style={styles.cellValue}>{gameMode === "basic" ? "Basic" : gameMode === "clock" ? "Clock" : "Scoreboard"}{isGameModeLocked ? " (Locked)" : " (Select on Verify Game)"}</Text>
 
@@ -12637,6 +12661,11 @@ export default function App() {
           </View>
         ) : null}
       </ScrollView>
+      {stage === "login" ? (
+        <View style={styles.loginReleaseFooter}>
+          <Text style={styles.appReleaseLabel} testID="login-release-info">{APP_RELEASE_LABEL}</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -12743,6 +12772,20 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 8,
     gap: 14,
+  },
+  loginScroll: {
+    flex: 1,
+  },
+  loginReleaseFooter: {
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  appReleaseLabel: {
+    color: "#7A8FA8",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
   },
   loginBrandRow: {
     flexDirection: "row",
