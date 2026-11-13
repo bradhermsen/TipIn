@@ -60,6 +60,36 @@ test("early-login notice reaches the login panel without replacing team and open
   assert.equal(state.error, message);
 });
 
+test("login displays each notice once and keeps restore diagnostics off the screen", () => {
+  let loginView;
+  function find(node) {
+    if (ts.isJsxElement(node) && node.children.some(child =>
+      ts.isJsxExpression(child) && child.expression?.getText(source).startsWith("error ?"))) {
+      loginView = node;
+    }
+    ts.forEachChild(node, find);
+  }
+  find(source);
+  assert.ok(loginView, "Login notice container must exist.");
+  const notices = loginView.children
+    .filter(child => /loginErrorPanel|nextGameMessage|restoreStatus/.test(child.getText(source)))
+    .map(child => child.getText(source)).join("\n");
+  const script = ts.transpileModule(`(<>${notices}</>)`, {
+    compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const message = "Team: Winona\nLevel: Varsity\nType: Girls\nLogin opens: Saturday at 9:00 AM CST";
+  for (const [error, nextGameMessage] of [[message, message], [message, ""], ["", message], ["", ""]]) {
+    const rendered = vm.runInNewContext(script, {
+      React: { createElement: (_type, _props, ...children) => children.filter(child => typeof child === "string").join("") },
+      View: "View", Text: "Text", styles: {}, error, nextGameMessage,
+      loginErrorTitle: "Login Not Open Yet", restoreStatus: "none",
+    });
+    assert.equal(rendered.split(message).length - 1, error || nextGameMessage ? 1 : 0);
+    assert.doesNotMatch(rendered, /Restore status:/);
+    if (error) assert.match(rendered, /Login Not Open Yet/);
+  }
+});
+
 test("closed games retain their existing notice instead of the early-login title", async () => {
   const context = load(["fetchNextGameForTeam"], {
     activeApiBase: "https://fixture/api", trace: () => {}, summarizePayload: () => {},

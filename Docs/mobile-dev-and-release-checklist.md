@@ -170,6 +170,9 @@ and a finalized game. Confirm that a 1:00 PM Central game opens at 9:00 AM Centr
 Deploy the API correction for the detailed message; a rebuilt APK is required
 for the new panel title and legacy-response handling.
 
+On the login screen, show the notice only once: the main alert takes precedence
+over the lower next-game status message. Do not display restore-status diagnostics.
+
 ## 6) Suggested Daily Flow
 
 1. Develop/test in dev client.

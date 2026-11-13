@@ -7900,11 +7900,7 @@ export default function App() {
                 <Text style={styles.loginErrorText}>{error}</Text>
               </View>
             ) : null}
-            <Text style={styles.restoreStatusText}>
-              Restore status: {restoreStatus}
-            </Text>
-
-            {nextGameMessage ? (
+            {!error && nextGameMessage ? (
               <Text style={styles.restoreStatusText}>{nextGameMessage}</Text>
             ) : null}
           </View>
