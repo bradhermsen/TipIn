@@ -104,6 +104,66 @@ Goalie rows.
 
 Use this for coaches/testers who should run without Metro, USB, or a connected laptop.
 
+### Release versions and build numbers
+
+`mobile/game-manager-mobile/app.json` is the version source for both local and
+EAS builds: `expo.version` is the user-facing major.minor.patch version and
+`expo.android.versionCode` is the increasing Android build number. EAS uses
+`cli.appVersionSource=local`; do not enable a separate remote version counter.
+The first numbered release is **1.0.1 (build 2)**.
+
+The login screen and Game Manager Settings display `DEV · v1.0.1 (build 2)` or
+`PROD · v1.0.1 (build 2)`. Installed APKs read the version and build from the
+native binary, not a possibly newer JavaScript manifest. Expo Go/web previews
+use the app configuration. DEV/PROD identifies the app package, not an in-app
+API-host override.
+
+Before each subsequent new APK, prepare its version from the mobile directory:
+
+```powershell
+npm run release:prepare -- 1.0.2
+```
+
+Bug fixes increment the patch number (`1.0.2`); features increment the minor
+number (`1.1.0`); breaking releases increment the major number (`2.0.0`).
+Omit the version argument to keep the current version and only increment the
+build number. The command rejects invalid or decreasing versions and always
+increments the build number. Commit the updated `app.json` with the release's
+code before building. Do not prepare again when simply reproducing that release.
+The initial 1.0.1/build 2 metadata is already prepared.
+
+For **local Android builds**, synchronize the generated native project before
+running Gradle so an existing ignored Android folder cannot retain an old version:
+
+```powershell
+$env:APP_ENV = "dev"
+$env:EXPO_PUBLIC_API_BASE = "https://api-dev.tipinscoring.com/api"
+npm run android:sync
+.\android\gradlew.bat :app:assembleRelease --console=plain
+```
+
+Use `APP_ENV=production` and the production API URL for a production build.
+Local release builds must still be signed with the existing environment's
+release key before distribution; do not distribute the default debug-signed APK.
+EAS generates its native project from the same committed app configuration.
+
+Name each signed/distributed APK using the prepared metadata:
+
+```powershell
+npm run release:filename -- dev
+# TipIn-GM-Dev-v1.0.1-build2.apk
+```
+
+Use `prod` for `TipIn-GM-Prod-v1.0.1-build2.apk`. Verify the APK's actual
+`versionName`, `versionCode`, and package match before attaching or installing it;
+renaming an older APK does not update its internal version.
+
+Create a GitHub Release from the exact built commit using a tag such as
+`gm-dev-v1.0.1-build2` or `gm-prod-v1.0.1-build2`. Attach the matching signed APK
+and record the environment, version/build, full source commit, release date,
+changes, and validation performed. Repository access is required for downloading
+private-repository release assets; do not assume those links are public.
+
 ### Recommended path: EAS preview APK
 
 Run once:

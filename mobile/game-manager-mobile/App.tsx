@@ -1,4 +1,6 @@
 import { StatusBar } from "expo-status-bar";
+import * as Application from "expo-application";
+import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -514,6 +516,19 @@ const DEFAULT_PUBLIC_API_BASE = (
   process.env.EXPO_PUBLIC_API_BASE || PROD_API_BASE
 ).replace(/\/+$/, "");
 const IS_PROD_API = DEFAULT_PUBLIC_API_BASE === PROD_API_BASE;
+const IS_GAME_MANAGER_BINARY =
+  Application.applicationId === "com.TipIn.gamemanager" ||
+  Application.applicationId === "com.TipIn.gamemanager.dev";
+const APP_RELEASE_ENVIRONMENT = IS_GAME_MANAGER_BINARY
+  ? Application.applicationId?.endsWith(".dev") ? "DEV" : "PROD"
+  : Constants.expoConfig?.extra?.appEnvironment ?? "UNKNOWN";
+const APP_RELEASE_VERSION = IS_GAME_MANAGER_BINARY
+  ? Application.nativeApplicationVersion
+  : Constants.expoConfig?.version;
+const APP_RELEASE_BUILD = IS_GAME_MANAGER_BINARY
+  ? Application.nativeBuildVersion
+  : Constants.expoConfig?.android?.versionCode?.toString();
+const APP_RELEASE_LABEL = `${APP_RELEASE_ENVIRONMENT} \u00b7 ${APP_RELEASE_VERSION ? `v${APP_RELEASE_VERSION}` : "Version unavailable"} (build ${APP_RELEASE_BUILD ?? "unavailable"})`;
 
 function isValidEmailAddress(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -7859,6 +7874,7 @@ export default function App() {
                 <Text style={styles.loginBrandSubtitle}>GAME MANAGER</Text>
               </View>
             </View>
+            <Text style={styles.appReleaseLabel} testID="login-release-info">{APP_RELEASE_LABEL}</Text>
 
             <View style={styles.loginIntroBlock}>
               <Text style={styles.loginIntroTitle}>Enter Your Access Code</Text>
@@ -11013,6 +11029,7 @@ export default function App() {
             <View style={styles.confirmOverlay}>
               <View style={styles.goalModal}>
                 <Text style={styles.goalModalTitle}>Game Manager Settings</Text>
+                <Text style={styles.appReleaseLabel} testID="settings-release-info">{APP_RELEASE_LABEL}</Text>
                 <Text style={styles.sectionLabel}>GAME MODE</Text>
                 <Text style={styles.cellValue}>{gameMode === "basic" ? "Basic" : gameMode === "clock" ? "Clock" : "Scoreboard"}{isGameModeLocked ? " (Locked)" : " (Select on Verify Game)"}</Text>
 
@@ -12751,6 +12768,12 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 8,
     gap: 14,
+  },
+  appReleaseLabel: {
+    color: "#7A8FA8",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
   },
   loginBrandRow: {
     flexDirection: "row",

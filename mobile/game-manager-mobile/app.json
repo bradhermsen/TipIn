@@ -2,7 +2,7 @@
   "expo": {
     "name": "TipIn Game Manager",
     "slug": "game-manager-mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "jsEngine": "hermes",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -21,6 +21,7 @@
     },
     "android": {
       "package": "com.TipIn.gamemanager",
+      "versionCode": 2,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#0B1424",

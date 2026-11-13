@@ -4,6 +4,10 @@ module.exports = ({ config }) => {
   return {
     ...config,
     name: isDev ? "TipIn GM Dev" : config.name,
+    extra: {
+      ...config.extra,
+      appEnvironment: isDev ? "DEV" : "PROD",
+    },
     android: {
       ...config.android,
       package: isDev ? "com.TipIn.gamemanager.dev" : config.android.package,
